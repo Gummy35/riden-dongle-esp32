@@ -2,15 +2,10 @@
 //
 // SPDX-License-Identifier: MIT
 
-#include <WiFi.h>
 #include <ElegantOTA.h>
 #include <WebSerial.h>
 #include <Logger.h>
-#define WIFI_CREDENTIALS_FILE "/wifi_credentials.txt"
-#define AP_SSID "ESP32_AP"
-#define WIFI_TIMEOUT_MS 20000 // 20 second WiFi connection timeout
-#define WIFI_RECOVER_TIME_MS 30000 // Wait 30 seconds after a failed connection attempt
-
+#include <WifiManager.h>
 #include "http_static.h"
 #include <riden_config/riden_config.h>
 #include <riden_http_server/riden_http_server.h>
@@ -137,17 +132,8 @@ void RidenHttpServer::advertiseMDNS()
 
 bool RidenHttpServer::begin()
 {
-    if (_readWiFiCredentials(wifi_ssid, wifi_password))
-    {
-        Serial.println("WiFi credentials read successfully.");
-        Serial.printf("SSID: %s, Password: %s\n", wifi_ssid.c_str(), wifi_password.c_str());
-        _connectToWiFi(wifi_ssid, wifi_password);
-    }
-    else
-    {
-        Serial.println("WiFi credentials not found or invalid. Starting AP mode.");
-        _startAPMode();
-    }
+    WifiManager.begin();
+
     _server->on("/", HTTP_GET, [this](AsyncWebServerRequest *request)
                 { this->_handlePage(request, "/html/index.html"); });
     _server->on("/wifi", HTTP_GET, [this](AsyncWebServerRequest *request)
@@ -187,119 +173,6 @@ bool RidenHttpServer::begin()
     return true;
 }
 
-bool RidenHttpServer::_readWiFiCredentials(String &ssid, String &password)
-{
-  File file = LittleFS.open(WIFI_CREDENTIALS_FILE, FILE_READ);
-  if (!file)
-  {
-    Serial.println("Failed to open wifi credentials file");
-    return false;
-  }
-
-  ssid = file.readStringUntil('\n');
-  password = file.readStringUntil('\n');
-
-  // Remove newline characters
-  ssid.trim();
-  password.trim();
-
-  file.close();
-
-  return !ssid.isEmpty() && !password.isEmpty();
-}
-
-void RidenHttpServer::_startAPMode()
-{
-  WiFi.softAP(AP_SSID);
-
-  Serial.println("Access Point started:");
-  Serial.print("SSID: ");
-  Serial.println(AP_SSID);
-  Serial.print("IP Address: ");
-  Serial.println(WiFi.softAPIP());
-}
-
-void keepWiFiAlive(void * parameter){
-    for(;;){
-        if(WiFi.status() == WL_CONNECTED){
-            vTaskDelay(10000 / portTICK_PERIOD_MS);
-            continue;
-        }
-
-        LOG_LN("[WIFI] Connecting");
-        WiFi.mode(WIFI_STA);
-        WiFi.begin();
-
-        unsigned long startAttemptTime = millis();
-
-        // Keep looping while we're not connected and haven't reached the timeout
-        while (WiFi.status() != WL_CONNECTED && 
-                millis() - startAttemptTime < WIFI_TIMEOUT_MS){}
-
-        // When we couldn't make a WiFi connection (or the timeout expired)
-		  // sleep for a while and then retry.
-        if(WiFi.status() != WL_CONNECTED){
-            LOG_LN("[WIFI] FAILED");
-            vTaskDelay(WIFI_RECOVER_TIME_MS / portTICK_PERIOD_MS);
-			  continue;
-        }
-
-        LOG_LN("[WIFI] Connected: " + WiFi.localIP().toString());
-    }
-}
-
-void RidenHttpServer::_connectToWiFi(const String &ssid, const String &password)
-{
-  WiFi.begin(ssid.c_str(), password.c_str());
-
-  Serial.print("Connecting to WiFi");
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 10)
-  {
-    delay(1000);
-    Serial.print(".");
-    attempts++;
-  }
-  Serial.println();
-
-  if (WiFi.status() == WL_CONNECTED)
-  {
-    Serial.println("Connected to WiFi successfully.");
-    Serial.print("IP Address: ");
-    Serial.println(WiFi.localIP());
-
-    xTaskCreatePinnedToCore(
-	    keepWiFiAlive,
-	    "keepWiFiAlive",  // Task name
-	    5000,             // Stack size (bytes)
-	    NULL,             // Parameter
-	    1,                // Task priority
-	    NULL,             // Task handle
-	    ARDUINO_RUNNING_CORE
-    );     
-  }
-  else
-  {
-    Serial.println("Failed to connect to WiFi. Starting AP mode.");
-    _startAPMode();
-  }
-}
-
-bool RidenHttpServer::_writeWiFiCredentials(const String &ssid, const String &password)
-{
-  File file = LittleFS.open(WIFI_CREDENTIALS_FILE, FILE_WRITE);
-  if (!file)
-  {
-    Serial.println("Failed to open wifi credentials file for writing");
-    return false;
-  }
-
-  file.println(ssid);
-  file.println(password);
-
-  file.close();
-  return true;
-}
 
 void RidenHttpServer::_onOTAEnd(bool success)
 {
@@ -307,7 +180,7 @@ void RidenHttpServer::_onOTAEnd(bool success)
   if (success)
   {
     Logger.Log("OTA update complete");
-    _writeWiFiCredentials(wifi_ssid, wifi_password);
+    WifiManager.saveCredentials();
     LittleFS.end();
   }
   else
@@ -371,7 +244,8 @@ void RidenHttpServer::_handleSaveWiFi(AsyncWebServerRequest *request)
     String ssid = request->arg("ssid");
     String password = request->arg("password");
 
-    if (_writeWiFiCredentials(ssid, password))
+    WifiManager.setCredentials(ssid, password);
+    if (WifiManager.saveCredentials())
     {
       request->send(200, "text/plain", "Credentials saved. Please restart the device.");
       LittleFS.end();
@@ -389,12 +263,9 @@ void RidenHttpServer::_handleSaveWiFi(AsyncWebServerRequest *request)
 }
 
 void RidenHttpServer::_handleClearWiFi(AsyncWebServerRequest *request)
-{
-  if (LittleFS.remove(WIFI_CREDENTIALS_FILE))
+{    
+  if (WifiManager.clearCredentials())
   {
-    WiFi.eraseAP();
-    LittleFS.end();
-    ESP.restart();
     request->send(200, "text/plain", "Credentials cleared.");
   }
   else
@@ -407,7 +278,7 @@ void RidenHttpServer::_handleClearWiFi(AsyncWebServerRequest *request)
 String RidenHttpServer::_htmlProcessor(const String &var)
 {
   if (var == "WIFI_SSID")
-    return wifi_ssid;
+    return WifiManager.ssid;
 
   return String();
 }
@@ -911,6 +782,7 @@ void RidenHttpServer::handle_modbus_qps(AsyncWebServerRequest *request)
     double voltage;
     for (int i = 0; i < 200; i++) {
         _modbus->get_voltage_set(voltage);
+        yield();
     }
     unsigned long end = millis();
     double qps = 1000.0 * double(100) / double(end - start);

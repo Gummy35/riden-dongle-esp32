@@ -22,8 +22,13 @@
 #include <vxi11_server/rpc_bind_server.h>
 #include <vxi11_server/vxi_server.h>
 
+#include "soc/rtc_cntl_reg.h"
+#include "soc/soc.h"
+
 #define NTP_SERVER "pool.ntp.org"
 // #define LED_BUILTIN 2
+
+#define FAILSAFE_FILE "/failsafe.tmp"
 
 #ifdef MOCK_RIDEN
 #define MODBUS_USE_SOFWARE_SERIAL
@@ -38,6 +43,7 @@ static bool has_time = false;
 static bool did_update_time = false;
 
 static bool connected = false;
+volatile bool isSafemode = false;
 
 RidenModbus *riden_modbus = new RidenModbus();                                                           ///< The modbus server
 RidenScpi *riden_scpi = new RidenScpi(riden_modbus);                                                     ///< The raw socket server + the SCPI command handler
@@ -120,6 +126,8 @@ void InitServices()
     while (!Serial)
         delay(10);
 
+    LOG_LN(ESP.getSdkVersion());
+
     riden_config.begin();
 
     // Wait for power supply firmware to boot
@@ -196,79 +204,107 @@ void SetupWebSerialCommands()
         String d(data, len);
         WebSerial.println(d);
         if (d.equals("help")) {
-            WebSerial.println("scpi : scpi commands");
             WebSerial.println("freeram : display free ram");
+            if (isSafemode)
+                WebSerial.println("boot : exit safemode and continue boot");
+            else {
+                WebSerial.println("safemode : enter safemode at next boot");
+                WebSerial.println("scpi : scpi commands");
+            }
             WebSerial.println("reboot : reboot dongle");
         } else if (d.equals("freeram")) {
             PrintFreeRam();
         } else if (d.equals("reboot")) {
             LittleFS.end();
             ESP.restart();
-        } else if (d.startsWith("scpi")) {
-            String subcommand = d.substring(4);
-            subcommand.trim();
-            if ((subcommand.equals("")) || subcommand.equals("help")) {
-                WebSerial.println("scpi help : display this help");
-                WebSerial.println("scpi list : list all available commands");
-                WebSerial.println("scpi [command] : execute command (see scpi list for available commands)");
-                WebSerial.println("** Note : Using scpi [command] will force close external connections **");
-            } else if (subcommand.equals("list")) {
-                File file = LittleFS.open("/SCPI_COMMANDS.md", FILE_READ);
-                if (!file) {
-                    WebSerial.println("Failed to scpi commands");
+        } else if (!isSafemode) {
+            if (d.equals("safemode")) {
+                File failsafeFile = LittleFS.open(FAILSAFE_FILE, "w");
+                if (failsafeFile) {
+                    failsafeFile.close();
+                    WebSerial.println("Safemode flag set, reboot to enter safemode");
                 } else {
-                    String tmp;
-                    String command = "";
-                    int i = 0;
-                    while (file.available()) {
-                        tmp = file.readStringUntil('\n');
-                        tmp.trim();
-                        if (tmp.startsWith("##")) {
-                            if (!command.equals("")) {
-                                command.trim();
-                                WebSerial.println(command);
-                                i++;
-                                delay(1);
-                            }
-                            command = tmp + " :";
-                        } else if (!tmp.equals("")) {
-                            if (!command.equals("")) {
-                                command.concat(" ");
-                                command.concat(tmp);
-                                command.concat("\n");
-                            }
-                        }
-                        yield();
-                    }
-                    command.trim();
-                    if (!command.equals(""))
-                        WebSerial.println(command);
-                    file.close();
+                    WebSerial.println("Could not create flag file. Consider reflashing littlefs partition");
                 }
-            } else {
-                if (scpi_handler->claim_control()) {
-                    scpi_handler->write(subcommand.c_str(), subcommand.length() - 1);
-                    char outbuffer[256];
-                    size_t len = 0;
-                    scpi_result_t rv = scpi_handler->read(outbuffer, &len, sizeof(outbuffer));
-                    if (rv == SCPI_RES_OK) {
-                        WebSerial.println(outbuffer);
+            } else if (d.startsWith("scpi")) {
+                String subcommand = d.substring(4);
+                subcommand.trim();
+                if ((subcommand.equals("")) || subcommand.equals("help")) {
+                    WebSerial.println("scpi help : display this help");
+                    WebSerial.println("scpi list : list all available commands");
+                    WebSerial.println("scpi [command] : execute command (see scpi list for available commands)");
+                    WebSerial.println("** Note : Using scpi [command] will force close external connections **");
+                } else if (subcommand.equals("list")) {
+                    File file = LittleFS.open("/SCPI_COMMANDS.md", FILE_READ);
+                    if (!file) {
+                        WebSerial.println("Failed to scpi commands");
                     } else {
-                        WebSerial.println("SCPI : Error while processing command");
+                        String tmp;
+                        String command = "";
+                        int i = 0;
+                        while (file.available()) {
+                            tmp = file.readStringUntil('\n');
+                            tmp.trim();
+                            if (tmp.startsWith("##")) {
+                                if (!command.equals("")) {
+                                    command.trim();
+                                    WebSerial.println(command);
+                                    i++;
+                                    delay(1);
+                                }
+                                command = tmp + " :";
+                            } else if (!tmp.equals("")) {
+                                if (!command.equals("")) {
+                                    command.concat(" ");
+                                    command.concat(tmp);
+                                    command.concat("\n");
+                                }
+                            }
+                            yield();
+                        }
+                        command.trim();
+                        if (!command.equals(""))
+                            WebSerial.println(command);
+                        file.close();
                     }
-                    scpi_handler->release_control();
                 } else {
-                    WebSerial.println("SCPI : could not process command");
+                    if (scpi_handler->claim_control()) {
+                        scpi_handler->write(subcommand.c_str(), subcommand.length() - 1);
+                        char outbuffer[256];
+                        size_t len = 0;
+                        scpi_result_t rv = scpi_handler->read(outbuffer, &len, sizeof(outbuffer));
+                        if (rv == SCPI_RES_OK) {
+                            WebSerial.println(outbuffer);
+                        } else {
+                            WebSerial.println("SCPI : Error while processing command");
+                        }
+                        scpi_handler->release_control();
+                    } else {
+                        WebSerial.println("SCPI : could not process command");
+                    }
                 }
             }
+        } else if (isSafemode && d.equals("boot")) {
+            isSafemode = false;
         }
 
         debug(WebSerial.printf("%d ms\n", millis() - ts));
     });
 }
 
+void failsafeMode()
+{
+    log_printf("Oooops, something went wrong. Entering safemode\n");
+    isSafemode = true;
+    while (isSafemode) {
+        http_server->loop();
+        delay(5);
+    }
+}
+
 void setup()
 {
+    WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // disable brownout
     pinMode(LED_BUILTIN, OUTPUT);
     led_ticker.attach(0.6, tick);
 
@@ -278,16 +314,41 @@ void setup()
 #endif
 
     // start filesystem
-    LittleFS.begin();
+    bool littleFSstatus = LittleFS.begin();
     // web server (ota + serial)
     http_server->begin();
     delay(500);
-    // init devices
-    InitServices();
-    // Logger.Log("v1.4");
+    WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 1); // reenable brownout
 
     // configure web serial commands
     SetupWebSerialCommands();
+
+    // Set failsafe flag
+    if (!littleFSstatus)
+        log_printf("LittleFS NOT initialized\n");
+    if (littleFSstatus) {
+        log_printf("Checking for safemode flag file\n");
+        // check failsafe status file
+        if (LittleFS.exists(FAILSAFE_FILE)) {
+            // enter failsafe mode
+            log_printf("Safemode flag file found, entering safemode\n");
+            failsafeMode();
+        }
+
+        File failsafeFile = LittleFS.open(FAILSAFE_FILE, "w");
+        if (failsafeFile) {
+            log_printf("Creating safemode flag file\n");
+            failsafeFile.close();
+        } else {
+            // can't create failsafe flag => enter failsafe mode
+            log_printf("Can't create file, entering safemode\n");
+            failsafeMode();
+        }
+    }
+
+    // init devices
+    InitServices();
+    // Logger.Log("v1.4");
 
     // create FreeRTOS tasks
     // xTaskCreatePinnedToCore(TaskKeypadCode, "TaskKeypad", 10000, NULL, 1, &TaskKeypad, 0);
@@ -295,7 +356,14 @@ void setup()
     // xTaskCreatePinnedToCore(TaskCommsCode, "TaskComms", 10000, NULL, 1, &TaskComms, 1);
     // xTaskCreatePinnedToCore(TaskUpdateLedsCode, "TaskLedcontroller", 10000, NULL, 1, &TaskLedController, 1);
     // wait for everyone to be ready
+
     delay(1000);
+    // initialization is ok, enter normal mode
+    if (LittleFS.exists(FAILSAFE_FILE)) {
+        log_printf("Init complete, Removing safemode flag\n");
+        LittleFS.remove(FAILSAFE_FILE);
+        isSafemode = false;
+    }
 }
 
 void loop()

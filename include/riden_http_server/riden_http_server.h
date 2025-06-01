@@ -70,10 +70,7 @@ class RidenHttpServer
     void _handleClearWiFi(AsyncWebServerRequest *request);
     void _handlePage(AsyncWebServerRequest *request, const char *pagePath = "/html/index.html");
     String _htmlProcessor(const String &var);
-    void _keepWiFiAlive(void * parameter);
 
-    String wifi_ssid = "";
-    String wifi_password = "";
     AsyncWebServer *_server;    
 };
 
