@@ -70,6 +70,8 @@ class RidenHttpServer
     void _handleClearWiFi(AsyncWebServerRequest *request);
     void _handlePage(AsyncWebServerRequest *request, const char *pagePath = "/html/index.html");
     String _htmlProcessor(const String &var);
+    void _handlePsuConfigPage(AsyncWebServerRequest *request);
+    String _htmlPsuConfigPageProcessor(const String &var);
 
     AsyncWebServer *_server;    
 };

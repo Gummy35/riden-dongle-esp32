@@ -154,8 +154,8 @@ bool RidenHttpServer::begin()
                 { this->handle_root_get(request); });
     _server->on("/psu/", HTTP_GET, [this](AsyncWebServerRequest *request)
                 { this->handle_psu_get(request); });
-    _server->on("/config/", HTTP_GET, [this](AsyncWebServerRequest *request)
-                { this->handle_config_get(request); });
+    _server->on("/config", HTTP_GET, [this](AsyncWebServerRequest *request)
+                { this->_handlePsuConfigPage(request); });
     _server->on("/config/", HTTP_POST, [this](AsyncWebServerRequest *request)
                 { this->handle_config_post(request); });
     _server->on("/disconnect_client/", HTTP_POST, [this](AsyncWebServerRequest *request)
@@ -427,127 +427,22 @@ void RidenHttpServer::handle_psu_get(AsyncWebServerRequest *request)
     request->send(response);
 }
 
-// void RidenHttpServer::handle_config_get(AsyncWebServerRequest *request)
-// {
-//     AsyncResponseStream *response = request->beginResponseStream("text/html");
-//     response->print(HTML_HEADER);
-//     response->print(HTML_CONFIG_BODY_1);
-//     //send_as_chunks(HTML_CONFIG_BODY_1);
-//     String configured_tz = riden_config.get_timezone_name();
-//     LOG_LN(configured_tz);
-//     for (int i = 0; i < /*riden_config.get_number_of_timezones()*/50; i++) {
-//         const Timezone &timezone = riden_config.get_timezone(i);
-//         String name = timezone.name;
-//         if (name == configured_tz) {
-//             response->print("<option value='" + name + "' selected>" + name + "</option>");
-//         } else {
-//             response->print("<option value='" + name + "'>" + name + "</option>");
-//         }
-//     }
-//     // send_as_chunks(HTML_CONFIG_BODY_2);
-//     response->print(HTML_CONFIG_BODY_2);
-//     uint32_t uart_baudrate = riden_config.get_uart_baudrate();
-//     for (uint32_t option : uart_baudrates) {
-//         String option_string(option, 10);
-//         if (option == uart_baudrate) {
-//             response->print("<option value='" + option_string + "' selected>" + option_string + "</option>");
-//         } else {
-//             response->print("<option value='" + option_string + "'>" + option_string + "</option>");
-//         }
-//     }
-//     //send_as_chunks(HTML_CONFIG_BODY_3);
-//     response->print(HTML_CONFIG_BODY_3);
-//     response->print(HTML_FOOTER);
-//     response->print("");
-//     request->send(response);
-// }
-
-void RidenHttpServer::handle_config_get(AsyncWebServerRequest *request)
+String RidenHttpServer::_htmlPsuConfigPageProcessor(const String &var)
 {
-    AsyncChunkedResponse *response = new AsyncChunkedResponse("text/html", [](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
-        static int phase = 0;
-        static size_t tz_index = 0;
-        static std::list<uint32_t>::const_iterator baud_it;
-        static String configured_tz;
-        static bool initialized = false;
-
-        if (!initialized) {
-            configured_tz = riden_config.get_timezone_name();
-            baud_it = uart_baudrates.begin(); // init de l'itérateur
-            tz_index = 0;
-            phase = 0;
-            initialized = true;
-        }
-
-        String chunk;
-
-        switch (phase) {
-            case 0: // Header + BODY_1
-                chunk += HTML_HEADER;
-                chunk += HTML_CONFIG_BODY_1;
-                phase++;
-                break;
-
-            case 1: // Timezones
-                while (tz_index < riden_config.get_number_of_timezones()) {
-                    const Timezone &tz = riden_config.get_timezone(tz_index);
-                    String name = tz.name;
-                    chunk += "<option value='" + name + "'";
-                    if (name == configured_tz) chunk += " selected";
-                    chunk += ">" + name + "</option>\n";
-                    tz_index++;
-
-                    if (chunk.length() > maxLen - 100) break;
-                }
-
-                if (tz_index >= riden_config.get_number_of_timezones()) {
-                    phase++;
-                }
-                break;
-
-            case 2: // BODY_2
-                chunk += HTML_CONFIG_BODY_2;
-                phase++;
-                break;
-
-            case 3: // Baudrates
-                while (baud_it != uart_baudrates.end()) {
-                    String rate_str = String(*baud_it, 10);
-                    chunk += "<option value='" + rate_str + "'";
-                    if (*baud_it == riden_config.get_uart_baudrate()) chunk += " selected";
-                    chunk += ">" + rate_str + "</option>\n";
-                    ++baud_it;
-
-                    if (chunk.length() > maxLen - 100) break;
-                }
-
-                if (baud_it == uart_baudrates.end()) {
-                    phase++;
-                }
-                break;
-
-            case 4: // BODY_3 + FOOTER
-                chunk += HTML_CONFIG_BODY_3;
-                chunk += HTML_FOOTER;
-                phase++;
-                break;
-
-            case 5: // Fin de transmission
-                initialized = false; // reset pour prochain appel
-                return 0;
-        }
-
-        // Copie le chunk dans le buffer
-        size_t len = chunk.length();
-        len = len > maxLen ? maxLen : len;
-        memcpy(buffer, chunk.c_str(), len);
-        return len;
-    });
-
-    request->send(response);
+  if (var == "TIMEZONE") {
+    return riden_config.get_timezone_name();
+  }
+  else if (var == "UARTBAUDRATE") {
+    return String(riden_config.get_uart_baudrate());
+  }
+  return String();
 }
 
-
+void RidenHttpServer::_handlePsuConfigPage(AsyncWebServerRequest *request)
+{
+  request->send(LittleFS, "/html/config.html", String(), false, [this](const String &str)
+                { return this->_htmlPsuConfigPageProcessor(str); });
+}
 
 void RidenHttpServer::handle_config_post(AsyncWebServerRequest *request)
 {
