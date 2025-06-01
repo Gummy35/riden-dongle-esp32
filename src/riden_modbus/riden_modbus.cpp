@@ -17,7 +17,7 @@
 #ifdef MODBUS_USE_SOFWARE_SERIAL
 SoftwareSerial SerialRuideng = SoftwareSerial(MODBUS_RX, MODBUS_TX);
 #else
-#define SerialRuideng Serial
+HardwareSerial SerialRuideng = HardwareSerial(2);
 #endif
 #endif
 
@@ -40,7 +40,7 @@ bool RidenModbus::begin()
 #ifdef MODBUS_USE_SOFWARE_SERIAL
     SerialRuideng.begin(riden_config.get_uart_baudrate(), SWSERIAL_8N1);
 #else
-    SerialRuideng.begin(riden_config.get_uart_baudrate(), SERIAL_8N1);
+    SerialRuideng.begin(riden_config.get_uart_baudrate(), SERIAL_8N1, MODBUS_RX, MODBUS_TX);    
 #endif
     if (!modbus.begin(&SerialRuideng)) {
         LOG_LN("Failed initializing ModbusRTU");

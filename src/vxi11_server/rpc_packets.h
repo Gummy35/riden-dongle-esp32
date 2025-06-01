@@ -7,7 +7,7 @@
 */
 
 #include "utilities.h"
-#include <ESP8266WiFi.h>
+#include <WiFi.h>
 #include <WiFiUdp.h>
 
 /*  The get functions take the connection (UDP or TCP client),

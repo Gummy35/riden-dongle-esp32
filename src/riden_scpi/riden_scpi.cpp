@@ -5,9 +5,8 @@
 #include <riden_logging/riden_logging.h>
 #include <riden_modbus/riden_modbus.h>
 #include <riden_scpi/riden_scpi.h>
-
 #include <Arduino.h>
-#include <ESP8266mDNS.h>
+#include <ESPmDNS.h>
 #include <SCPI_Parser.h>
 #include <functional>
 
@@ -187,10 +186,10 @@ scpi_result_t RidenScpi::SCPI_Flush(scpi_t *context)
         return SCPI_RES_OK;
     }
     LOG_F("SCPI_Flush: sending \"%.*s\"\n", (int)ridenScpi->write_buffer_length, ridenScpi->write_buffer);
-    if (ridenScpi->client) {
-        ridenScpi->client.write(ridenScpi->write_buffer, ridenScpi->write_buffer_length);
+    if (ridenScpi->_client) {
+        ridenScpi->_client.write(ridenScpi->write_buffer, ridenScpi->write_buffer_length);
         ridenScpi->write_buffer_length = 0;
-        ridenScpi->client.flush();
+        ridenScpi->_client.flush();
     }
     return SCPI_RES_OK;
 }
@@ -243,7 +242,7 @@ scpi_result_t RidenScpi::Rcl(scpi_t *context)
         SCPI_ErrorPush(context, SCPI_ERROR_ILLEGAL_PARAMETER_VALUE);
         return SCPI_RES_ERR;
     }
-    if (ridenScpi->ridenModbus.set_preset(profile)) {
+    if (ridenScpi->_ridenModbus->set_preset(profile)) {
         return SCPI_RES_OK;
     } else {
         SCPI_ErrorPush(context, SCPI_ERROR_COMMAND);
@@ -263,7 +262,7 @@ scpi_result_t RidenScpi::DisplayBrightness(scpi_t *context)
         SCPI_ErrorPush(context, SCPI_ERROR_ILLEGAL_PARAMETER_VALUE);
         return SCPI_RES_ERR;
     }
-    if (ridenScpi->ridenModbus.set_brightness(brightness)) {
+    if (ridenScpi->_ridenModbus->set_brightness(brightness)) {
         return SCPI_RES_OK;
     } else {
         SCPI_ErrorPush(context, SCPI_ERROR_COMMAND);
@@ -276,7 +275,7 @@ scpi_result_t RidenScpi::DisplayBrightnessQ(scpi_t *context)
     RidenScpi *ridenScpi = static_cast<RidenScpi *>(context->user_context);
 
     uint8_t brightness;
-    if (ridenScpi->ridenModbus.get_brightness(brightness)) {
+    if (ridenScpi->_ridenModbus->get_brightness(brightness)) {
         SCPI_ResultUInt8(context, brightness);
         return SCPI_RES_OK;
     } else {
@@ -305,7 +304,7 @@ scpi_result_t RidenScpi::DisplayLanguage(scpi_t *context)
         SCPI_ErrorPush(context, SCPI_ERROR_ILLEGAL_PARAMETER_VALUE);
         return SCPI_RES_ERR;
     }
-    if (ridenScpi->ridenModbus.set_language(language)) {
+    if (ridenScpi->_ridenModbus->set_language(language)) {
         return SCPI_RES_OK;
     } else {
         SCPI_ErrorPush(context, SCPI_ERROR_COMMAND);
@@ -318,7 +317,7 @@ scpi_result_t RidenScpi::DisplayLanguageQ(scpi_t *context)
     RidenScpi *ridenScpi = static_cast<RidenScpi *>(context->user_context);
 
     uint16_t language;
-    if (ridenScpi->ridenModbus.get_language(language)) {
+    if (ridenScpi->_ridenModbus->get_language(language)) {
         SCPI_ResultChoice(context, language_options, language);
         return SCPI_RES_OK;
     } else {
@@ -335,7 +334,7 @@ scpi_result_t RidenScpi::SystemDate(scpi_t *context)
     if (!SCPI_ParamUnsignedInt(context, &year, true) || !SCPI_ParamUnsignedInt(context, &month, true) || !SCPI_ParamUnsignedInt(context, &day, true)) {
         return SCPI_RES_ERR;
     }
-    if (ridenScpi->ridenModbus.set_date(year, month, day)) {
+    if (ridenScpi->_ridenModbus->set_date(year, month, day)) {
         return SCPI_RES_OK;
     } else {
         SCPI_ErrorPush(context, SCPI_ERROR_COMMAND);
@@ -348,7 +347,7 @@ scpi_result_t RidenScpi::SystemDateQ(scpi_t *context)
     RidenScpi *ridenScpi = static_cast<RidenScpi *>(context->user_context);
 
     tm clock;
-    if (ridenScpi->ridenModbus.get_clock(clock)) {
+    if (ridenScpi->_ridenModbus->get_clock(clock)) {
         SCPI_ResultUInt16(context, clock.tm_year + 1900);
         SCPI_ResultUInt16(context, clock.tm_mon + 1);
         SCPI_ResultUInt16(context, clock.tm_mday);
@@ -369,7 +368,7 @@ scpi_result_t RidenScpi::SystemTime(scpi_t *context)
     if (!SCPI_ParamUnsignedInt(context, &hour, true) || !SCPI_ParamUnsignedInt(context, &minute, true) || !SCPI_ParamUnsignedInt(context, &second, true)) {
         return SCPI_RES_ERR;
     }
-    if (ridenScpi->ridenModbus.set_time(hour, minute, second)) {
+    if (ridenScpi->_ridenModbus->set_time(hour, minute, second)) {
         return SCPI_RES_OK;
     } else {
         SCPI_ErrorPush(context, SCPI_ERROR_COMMAND);
@@ -382,7 +381,7 @@ scpi_result_t RidenScpi::SystemTimeQ(scpi_t *context)
     RidenScpi *ridenScpi = static_cast<RidenScpi *>(context->user_context);
 
     tm clock;
-    if (ridenScpi->ridenModbus.get_clock(clock)) {
+    if (ridenScpi->_ridenModbus->get_clock(clock)) {
         SCPI_ResultUInt16(context, clock.tm_hour);
         SCPI_ResultUInt16(context, clock.tm_min);
         SCPI_ResultUInt16(context, clock.tm_sec);
@@ -401,7 +400,7 @@ scpi_result_t RidenScpi::OutputState(scpi_t *context)
     if (!SCPI_ParamBool(context, &on, true)) {
         return SCPI_RES_ERR;
     }
-    if (ridenScpi->ridenModbus.set_output_on(on)) {
+    if (ridenScpi->_ridenModbus->set_output_on(on)) {
         return SCPI_RES_OK;
     } else {
         SCPI_ErrorPush(context, SCPI_ERROR_COMMAND);
@@ -414,7 +413,7 @@ scpi_result_t RidenScpi::OutputStateQ(scpi_t *context)
     RidenScpi *ridenScpi = static_cast<RidenScpi *>(context->user_context);
 
     bool on;
-    if (ridenScpi->ridenModbus.get_output_on(on)) {
+    if (ridenScpi->_ridenModbus->get_output_on(on)) {
         SCPI_ResultBool(context, on);
         return SCPI_RES_OK;
     } else {
@@ -428,7 +427,7 @@ scpi_result_t RidenScpi::OutputModeQ(scpi_t *context)
     RidenScpi *ridenScpi = static_cast<RidenScpi *>(context->user_context);
 
     OutputMode output_mode;
-    if (ridenScpi->ridenModbus.get_output_mode(output_mode)) {
+    if (ridenScpi->_ridenModbus->get_output_mode(output_mode)) {
         switch (output_mode) {
         case OutputMode::CONSTANT_VOLTAGE:
             SCPI_ResultText(context, "CV");
@@ -460,7 +459,7 @@ scpi_result_t RidenScpi::SourceVoltage(scpi_t *context)
         SCPI_ErrorPush(context, SCPI_ERROR_DATA_TYPE_ERROR);
         return SCPI_RES_ERR;
     }
-    if (ridenScpi->ridenModbus.set_voltage_set(value.content.value)) {
+    if (ridenScpi->_ridenModbus->set_voltage_set(value.content.value)) {
         return SCPI_RES_OK;
     } else {
         SCPI_ErrorPush(context, SCPI_ERROR_COMMAND);
@@ -474,7 +473,7 @@ scpi_result_t RidenScpi::SourceVoltageQ(scpi_t *context)
 
     double voltage;
 
-    if (ridenScpi->ridenModbus.get_voltage_set(voltage)) {
+    if (ridenScpi->_ridenModbus->get_voltage_set(voltage)) {
         SCPI_ResultDouble(context, voltage);
         return SCPI_RES_OK;
     } else {
@@ -488,7 +487,7 @@ scpi_result_t RidenScpi::SourceVoltageProtectionTrippedQ(scpi_t *context)
     RidenScpi *ridenScpi = static_cast<RidenScpi *>(context->user_context);
 
     Protection protection;
-    if (ridenScpi->ridenModbus.get_protection(protection)) {
+    if (ridenScpi->_ridenModbus->get_protection(protection)) {
         SCPI_ResultBool(context, protection == Protection::OVP);
         return SCPI_RES_OK;
     } else {
@@ -511,7 +510,7 @@ scpi_result_t RidenScpi::SourceCurrent(scpi_t *context)
         SCPI_ErrorPush(context, SCPI_ERROR_DATA_TYPE_ERROR);
         return SCPI_RES_ERR;
     }
-    if (ridenScpi->ridenModbus.set_current_set(value.content.value)) {
+    if (ridenScpi->_ridenModbus->set_current_set(value.content.value)) {
         return SCPI_RES_OK;
     } else {
         SCPI_ErrorPush(context, SCPI_ERROR_COMMAND);
@@ -525,7 +524,7 @@ scpi_result_t RidenScpi::SourceCurrentQ(scpi_t *context)
 
     double current;
 
-    if (ridenScpi->ridenModbus.get_current_set(current)) {
+    if (ridenScpi->_ridenModbus->get_current_set(current)) {
         SCPI_ResultDouble(context, current);
         return SCPI_RES_OK;
     } else {
@@ -539,7 +538,7 @@ scpi_result_t RidenScpi::SourceCurrentProtectionTrippedQ(scpi_t *context)
     RidenScpi *ridenScpi = static_cast<RidenScpi *>(context->user_context);
 
     Protection protection;
-    if (ridenScpi->ridenModbus.get_protection(protection)) {
+    if (ridenScpi->_ridenModbus->get_protection(protection)) {
         SCPI_ResultBool(context, protection == Protection::OCP);
         return SCPI_RES_OK;
     } else {
@@ -554,7 +553,7 @@ scpi_result_t RidenScpi::MeasureVoltageQ(scpi_t *context)
 
     double voltage;
 
-    if (ridenScpi->ridenModbus.get_voltage_out(voltage)) {
+    if (ridenScpi->_ridenModbus->get_voltage_out(voltage)) {
         SCPI_ResultDouble(context, voltage);
         return SCPI_RES_OK;
     } else {
@@ -569,7 +568,7 @@ scpi_result_t RidenScpi::MeasureCurrentQ(scpi_t *context)
 
     double current;
 
-    if (ridenScpi->ridenModbus.get_current_out(current)) {
+    if (ridenScpi->_ridenModbus->get_current_out(current)) {
         SCPI_ResultDouble(context, current);
         return SCPI_RES_OK;
     } else {
@@ -584,7 +583,7 @@ scpi_result_t RidenScpi::MeasurePowerQ(scpi_t *context)
 
     double power;
 
-    if (ridenScpi->ridenModbus.get_power_out(power)) {
+    if (ridenScpi->_ridenModbus->get_power_out(power)) {
         SCPI_ResultDouble(context, power);
         return SCPI_RES_OK;
     } else {
@@ -605,9 +604,9 @@ scpi_result_t RidenScpi::MeasureTemperatureQ(scpi_t *context)
     double temperature;
     bool success;
     if (choice == 0) {
-        success = ridenScpi->ridenModbus.get_system_temperature_celsius(temperature);
+        success = ridenScpi->_ridenModbus->get_system_temperature_celsius(temperature);
     } else {
-        success = ridenScpi->ridenModbus.get_probe_temperature_celsius(temperature);
+        success = ridenScpi->_ridenModbus->get_probe_temperature_celsius(temperature);
     }
     if (success) {
         SCPI_ResultDouble(context, temperature);
@@ -632,7 +631,7 @@ scpi_result_t RidenScpi::SourceVoltageLimit(scpi_t *context)
         SCPI_ErrorPush(context, SCPI_ERROR_DATA_TYPE_ERROR);
         return SCPI_RES_ERR;
     }
-    if (ridenScpi->ridenModbus.set_over_voltage_protection(value.content.value)) {
+    if (ridenScpi->_ridenModbus->set_over_voltage_protection(value.content.value)) {
         return SCPI_RES_OK;
     } else {
         SCPI_ErrorPush(context, SCPI_ERROR_COMMAND);
@@ -654,7 +653,7 @@ scpi_result_t RidenScpi::SourceCurrentLimit(scpi_t *context)
         SCPI_ErrorPush(context, SCPI_ERROR_DATA_TYPE_ERROR);
         return SCPI_RES_ERR;
     }
-    if (ridenScpi->ridenModbus.set_over_current_protection(value.content.value)) {
+    if (ridenScpi->_ridenModbus->set_over_current_protection(value.content.value)) {
         return SCPI_RES_OK;
     } else {
         SCPI_ErrorPush(context, SCPI_ERROR_COMMAND);
@@ -670,7 +669,7 @@ scpi_result_t RidenScpi::SystemBeeperState(scpi_t *context)
     if (!SCPI_ParamBool(context, &on, TRUE)) {
         return SCPI_RES_ERR;
     }
-    if (ridenScpi->ridenModbus.set_buzzer_enabled(on)) {
+    if (ridenScpi->_ridenModbus->set_buzzer_enabled(on)) {
         return SCPI_RES_OK;
     } else {
         SCPI_ErrorPush(context, SCPI_ERROR_COMMAND);
@@ -683,7 +682,7 @@ scpi_result_t RidenScpi::SystemBeeperStateQ(scpi_t *context)
     RidenScpi *ridenScpi = static_cast<RidenScpi *>(context->user_context);
 
     bool on;
-    if (ridenScpi->ridenModbus.is_buzzer_enabled(on)) {
+    if (ridenScpi->_ridenModbus->is_buzzer_enabled(on)) {
         SCPI_ResultBool(context, on);
         return SCPI_RES_OK;
     } else {
@@ -749,11 +748,11 @@ bool RidenScpi::begin()
 
     LOG_LN("RidenScpi initializing");
 
-    String type = ridenModbus.get_type();
+    String type = _ridenModbus->get_type();
     uint32_t serial_number;
-    ridenModbus.get_serial_number(serial_number);
+    _ridenModbus->get_serial_number(serial_number);
     uint16_t firmware_version;
-    ridenModbus.get_firmware_version(firmware_version);
+    _ridenModbus->get_firmware_version(firmware_version);
     memcpy(idn2, type.c_str(), type.length());
     sprintf(idn3, "%08u", serial_number);
     sprintf(idn4, "%u.%u", firmware_version / 100u, firmware_version % 100u);
@@ -768,14 +767,8 @@ bool RidenScpi::begin()
     scpi_context.user_context = this;
 
     // Start TCP listener
-    tcpServer.begin();
-    tcpServer.setNoDelay(true);
-
-    if (MDNS.isRunning()) {
-        LOG_LN("RidenScpi advertising as scpi-raw.");
-        auto scpi_service = MDNS.addService(NULL, "scpi-raw", "tcp", tcpServer.port());
-        MDNS.addServiceTxt(scpi_service, "version", SCPI_STD_VERSION_REVISION);
-    }
+    _tcpServer.begin();
+    _tcpServer.setNoDelay(true);
 
     LOG_LN("RidenScpi initialized");
 
@@ -783,25 +776,32 @@ bool RidenScpi::begin()
     return true;
 }
 
+void RidenScpi::advertiseMDNS()
+{
+    LOG_LN("RidenScpi advertising as scpi-raw.");
+    auto scpi_service = MDNS.addService("scpi-raw", "tcp", port());
+    MDNS.addServiceTxt("scpi-raw", "tcp", "version", SCPI_STD_VERSION_REVISION);
+}
+
 bool RidenScpi::loop()
 {
     if (external_control) {
         // skip this loop if I'm under external control
-        if (client) {
+        if (_client) {
             LOG_LN("RidenScpi: disconnect client because I am under external control.");
-            client.stop();
+            _client.stop();
         }
         return true;
     }
 
     // Check for new client connecting
-    WiFiClient newClient = tcpServer.accept();
+    WiFiClient newClient = _tcpServer.accept();
     if (newClient) {
         LOG_LN("RidenScpi: New client.");
-        if (!client) {
+        if (!_client) {
             newClient.setTimeout(100);
             newClient.setNoDelay(true);
-            client = newClient;
+            _client = newClient;
             reset_buffers();
         } else {
             newClient.stop();
@@ -809,18 +809,18 @@ bool RidenScpi::loop()
     }
 
     // Check for incoming data
-    if (client) {
-        int bytes_available = client.available();
+    if (_client) {
+        int bytes_available = _client.available();
         if (bytes_available > 0) {
             // Now read until I find a newline. There may be way more data in the buffer than 1 command.
             char buffer[1];
-            while (client.readBytes(buffer, 1) == 1) {
+            while (_client.readBytes(buffer, 1) == 1) {
                 if (scpi_context.buffer.position >= SCPI_INPUT_BUFFER_LENGTH) {
                     // Client is sending more data than we can handle
                     LOG_F("ERROR: RidenScpi buffer overflow. Flushing data and killing connection.\n");
                     scpi_context.buffer.position = 0;
                     scpi_context.buffer.length = 0;
-                    client.stop();
+                    _client.stop();
                     break;
                 }
                 // insert the character into the buffer.
@@ -837,9 +837,9 @@ bool RidenScpi::loop()
     }
 
     // Stop client which disconnects
-    if (client && !client.connected()) {
+    if (_client && !_client.connected()) {
         LOG_LN("RidenScpi: disconnect client.");
-        client.stop();
+        _client.stop();
     }
 
     return true;
@@ -847,22 +847,22 @@ bool RidenScpi::loop()
 
 uint16_t RidenScpi::port()
 {
-    return tcpServer.port();
+    return _port;
 }
 
 std::list<IPAddress> RidenScpi::get_connected_clients()
 {
     std::list<IPAddress> connected_clients;
-    if (client && client.connected()) {
-        connected_clients.push_back(client.remoteIP());
+    if (_client && _client.connected()) {
+        connected_clients.push_back(_client.remoteIP());
     }
     return connected_clients;
 }
 
 void RidenScpi::disconnect_client(const IPAddress &ip)
 {
-    if (client && client.connected() && client.remoteIP() == ip) {
-        client.stop();
+    if (_client && _client.connected() && _client.remoteIP() == ip) {
+        _client.stop();
     }
 }
 

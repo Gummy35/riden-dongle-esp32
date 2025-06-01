@@ -34,9 +34,10 @@ class RidenModbusTCP : public ModbusTCP
 class RidenModbusBridge
 {
   public:
-    explicit RidenModbusBridge(RidenModbus &riden_modbus) : riden_modbus(riden_modbus){};
+    explicit RidenModbusBridge(RidenModbus* riden_modbus) : _riden_modbus(riden_modbus){};
     bool begin();
     bool loop();
+    void advertiseMDNS();
 
     uint16_t port();
     std::list<IPAddress> get_connected_clients();
@@ -46,8 +47,8 @@ class RidenModbusBridge
     Modbus::ResultCode modbus_rtu_raw_callback(uint8_t *data, uint8_t len, void *custom);
 
   private:
-    RidenModbus &riden_modbus;
-    RidenModbusTCP modbus_tcp;
+    RidenModbus* _riden_modbus;
+    RidenModbusTCP* _modbus_tcp;
     bool initialized = false;
 
     // State of any currently running modbus command

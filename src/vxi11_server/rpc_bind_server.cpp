@@ -45,7 +45,7 @@ void RPC_Bind_Server::loop()
         a vxi_server becomes available.
     */
 
-    if (vxi_server.available()) {
+    if (vxi_server->available()) {
         int len;
 
         if (udp.parsePacket() > 0) {
@@ -102,7 +102,7 @@ void RPC_Bind_Server::process_request(bool onUDP)
         // i.e., if it is a valid PORTMAP request
         LOG_F("PORTMAP command received on %s port %d; ", (onUDP ? "UDP" : "TCP"), rpc::BIND_PORT);
 
-        port = vxi_server.allocate();
+        port = vxi_server->allocate();
 
         /*  The logic in the loop() routine should not allow
             the port returned to be zero, since we first checked

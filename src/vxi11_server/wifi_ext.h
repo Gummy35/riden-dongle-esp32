@@ -5,7 +5,7 @@
   @brief  Declaration and definition of WiFiServer_ext class.
 */
 
-#include <ESP8266WiFi.h>
+#include <WiFi.h>
 
 /*!
   @brief  Minor extension of WiFiServer class to allow initialization

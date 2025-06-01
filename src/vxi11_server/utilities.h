@@ -6,7 +6,7 @@
 
 #include <riden_logging/riden_logging.h> // for logging
 #include <stdint.h>
-#include <ESP8266WiFi.h>
+#include <WiFi.h>
 
 /*!
   @brief  Manages storage and conversion of 4-byte big-endian data.

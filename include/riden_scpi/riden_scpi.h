@@ -6,9 +6,9 @@
 
 #include <riden_modbus/riden_modbus.h>
 
-#include <ESP8266WiFi.h>
 #include <SCPI_Parser.h>
 #include <list>
+#include <WiFi.h>
 
 #define WRITE_BUFFER_LENGTH (256)
 #define SCPI_INPUT_BUFFER_LENGTH 256
@@ -21,10 +21,11 @@ namespace RidenDongle
 class RidenScpi
 {
   public:
-    explicit RidenScpi(RidenModbus &ridenModbus, uint16_t port = DEFAULT_SCPI_PORT) : ridenModbus(ridenModbus), tcpServer(port) {}
+    explicit RidenScpi(RidenModbus* ridenModbus, uint16_t port = DEFAULT_SCPI_PORT) : _ridenModbus(ridenModbus), _tcpServer(port), _port(port) {}
 
     bool begin();
     bool loop();
+    void advertiseMDNS();
 
     uint16_t port();
     std::list<IPAddress> get_connected_clients();
@@ -42,7 +43,8 @@ class RidenScpi
     scpi_result_t read(char *data, size_t *len, size_t max_len);
 
   private:
-    RidenModbus &ridenModbus;
+    RidenModbus* _ridenModbus;
+    uint16_t _port;
 
     bool initialized = false;
     const char *idn1 = "Riden"; // <company name>
@@ -65,8 +67,8 @@ class RidenScpi
     static const scpi_command_t scpi_commands[];
     static scpi_interface_t scpi_interface;
 
-    WiFiServer tcpServer;
-    WiFiClient client;
+    WiFiServer  _tcpServer;
+    WiFiClient  _client;
 
     void reset_buffers();
 

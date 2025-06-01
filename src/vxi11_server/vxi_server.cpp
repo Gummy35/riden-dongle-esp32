@@ -2,24 +2,24 @@
 #include "rpc_enums.h"
 #include "rpc_packets.h"
 
-#include <ESP8266mDNS.h>
+#include <ESPmDNS.h>
 #include <SCPI_Parser.h>
 #include <list>
 
-VXI_Server::VXI_Server(SCPI_handler_interface &scpi_handler)
+VXI_Server::VXI_Server(SCPI_handler_interface* scpi_handler)
     : vxi_port(rpc::VXI_PORT_START, rpc::VXI_PORT_END),
-    scpi_handler(scpi_handler)
+    _scpi_handler(scpi_handler)
 {
-    /*  We do not start the tcp_server port here, because
+    /*  We do not start the _tcp_server port here, because
         WiFi has likely not yet been initialized. Instead,
         we wait until the begin() command.  */
 }
 
-VXI_Server::VXI_Server(SCPI_handler_interface &scpi_handler, uint32_t port_min, uint32_t port_max)
+VXI_Server::VXI_Server(SCPI_handler_interface* scpi_handler, uint32_t port_min, uint32_t port_max)
     : vxi_port(port_min, port_max),
-    scpi_handler(scpi_handler)
+    _scpi_handler(scpi_handler)
 {
-    /*  We do not start the tcp_server port here, because
+    /*  We do not start the _tcp_server port here, because
         WiFi has likely not yet been initialized. Instead,
         we wait until the begin() command.  */
 }
@@ -41,13 +41,13 @@ uint32_t VXI_Server::allocate()
 void VXI_Server::begin(bool bNext)
 {
     if (bNext) {
-        client.stop();
+        _client.stop();
 
         if (vxi_port.is_noncyclic()) return; // no need to change port, and the rest is already done
 
         // counter is cyclic, so we need to stop the server and rotate to the next port
         LOG_F("Stop Listening for VXI commands on TCP port %u\n", (uint32_t)vxi_port);
-        tcp_server.stop();
+        _tcp_server.stop();
 
         /*  Note that vxi_port is not an ordinary uint32_t. It is
             an instance of class cyclic_uint32_t, defined in utilities.h,
@@ -59,29 +59,33 @@ void VXI_Server::begin(bool bNext)
         vxi_port++;
     }
 
-    tcp_server.begin(vxi_port);
+    _tcp_server.begin(vxi_port);
 
     LOG_F("Listening for VXI commands on TCP port %u\n", (uint32_t)vxi_port);
+}
+
+void VXI_Server::advertiseMDNS()
+{
     if (vxi_port.is_noncyclic()) {
-        if (MDNS.isRunning()) {
+      //  if (MDNS.isRunning()) {
             LOG_LN("VXI_Server advertising as vxi-11.");
-            auto scpi_service = MDNS.addService(NULL, "vxi-11", "tcp", (uint32_t)vxi_port);
-            MDNS.addServiceTxt(scpi_service, "version", SCPI_STD_VERSION_REVISION);
-        }
+            auto scpi_service = MDNS.addService("vxi-11", "tcp", (uint32_t)vxi_port);
+            MDNS.addServiceTxt("vxi-11", "tcp", "version", SCPI_STD_VERSION_REVISION);
+      //  }
     }
     // else: no mDNS, port changes too often
 }
 
 void VXI_Server::loop()
 {
-    if (client) // if a connection has been established on port
+    if (_client) // if a connection has been established on port
     {
         bool bClose = false;
 
-        if (!client.connected()) {
+        if (!_client.connected()) {
             bClose = true;
         } else {
-            int len = get_vxi_packet(client);
+            int len = get_vxi_packet(_client);
 
             if (len > 0) {
                 bClose = handle_packet();
@@ -90,16 +94,16 @@ void VXI_Server::loop()
 
         if (bClose) {
             LOG_F("Closing VXI connection on port %u\n", (uint32_t)vxi_port);
-            /*  this method will stop the client and the tcp_server, then rotate
+            /*  this method will stop the _client and the _tcp_server, then rotate
                 to the next port (within the specified range) and restart the
-                tcp_server to listen on that port.  */
+                _tcp_server to listen on that port.  */
             begin_next();
         }
-    } else // i.e., if ! client
+    } else // i.e., if ! _client
     {
-        client = tcp_server.accept(); // see if a client is available (data has been sent on port)
+        _client = _tcp_server.accept(); // see if a _client is available (data has been sent on port)
 
-        if (client) {
+        if (_client) {
             LOG_F("\nVXI connection established on port %u\n", (uint32_t)vxi_port);
         }
     }
@@ -143,7 +147,7 @@ bool VXI_Server::handle_packet()
 
     if (rc != rpc::SUCCESS) {
         vxi_response->rpc_status = rc;
-        send_vxi_packet(client, sizeof(rpc_response_packet));
+        send_vxi_packet(_client, sizeof(rpc_response_packet));
     }
 
     /*  signal to caller whether the connection should be close (i.e., DESTROY_LINK)  */
@@ -158,13 +162,13 @@ void VXI_Server::create_link()
         be null-terminated, but just in case, we will put in
         the terminator.  */
 
-    if (!scpi_handler.claim_control()) {
+    if (!_scpi_handler->claim_control()) {
         create_response->rpc_status = rpc::SUCCESS;
         create_response->error = rpc::OUT_OF_RESOURCES; // not DEVICE_LOCKED because that would require lock_timeout etc
         create_response->link_id = 0;
         create_response->abort_port = 0;
         create_response->max_receive_size = 0;
-        send_vxi_packet(client, sizeof(create_response_packet));
+        send_vxi_packet(_client, sizeof(create_response_packet));
         return;
     }
 
@@ -176,7 +180,7 @@ void VXI_Server::create_link()
     create_response->link_id = 0;
     create_response->abort_port = 0;
     create_response->max_receive_size = VXI_READ_SIZE - 4;
-    send_vxi_packet(client, sizeof(create_response_packet));
+    send_vxi_packet(_client, sizeof(create_response_packet));
 }
 
 void VXI_Server::destroy_link()
@@ -184,8 +188,8 @@ void VXI_Server::destroy_link()
     LOG_F("DESTROY LINK on port %u\n", (uint32_t)vxi_port);
     destroy_response->rpc_status = rpc::SUCCESS;
     destroy_response->error = rpc::NO_ERROR;
-    send_vxi_packet(client, sizeof(destroy_response_packet));
-    scpi_handler.release_control();
+    send_vxi_packet(_client, sizeof(destroy_response_packet));
+    _scpi_handler->release_control();
 }
 
 void VXI_Server::read()
@@ -193,7 +197,7 @@ void VXI_Server::read()
     // This is where we read from the device
     char outbuffer[256];
     size_t len = 0;
-    scpi_result_t rv = scpi_handler.read(outbuffer, &len, sizeof(outbuffer));
+    scpi_result_t rv = _scpi_handler->read(outbuffer, &len, sizeof(outbuffer));
 
     // FIXME handle error codes, maybe even pick up errors from the SCPI Parser
 
@@ -204,7 +208,7 @@ void VXI_Server::read()
     read_response->data_len = (uint32_t)len;
     strcpy(read_response->data, outbuffer);
 
-    send_vxi_packet(client, sizeof(read_response_packet) + len);
+    send_vxi_packet(_client, sizeof(read_response_packet) + len);
 }
 
 void VXI_Server::write()
@@ -219,13 +223,13 @@ void VXI_Server::write()
     write_request->data[len] = 0;
     LOG_F("WRITE DATA on port %u = \"%.*s\"\n", (uint32_t)vxi_port, (int)len, write_request->data);
     /*  Parse and respond to the SCPI command  */
-    scpi_handler.write(write_request->data, len);
+    _scpi_handler->write(write_request->data, len);
 
     /*  Generate the response  */
     write_response->rpc_status = rpc::SUCCESS;
     write_response->error = rpc::NO_ERROR;
     write_response->size = wlen; // with the original length
-    send_vxi_packet(client, sizeof(write_response_packet));
+    send_vxi_packet(_client, sizeof(write_response_packet));
 }
 
 const char *VXI_Server::get_visa_resource()
@@ -237,17 +241,17 @@ const char *VXI_Server::get_visa_resource()
 
 std::list<IPAddress> VXI_Server::get_connected_clients()
 {
-    std::list<IPAddress> connected_clients;
-    if (client && client.connected()) {
-        connected_clients.push_back(client.remoteIP());
+    std::list<IPAddress> connected__clients;
+    if (_client && _client.connected()) {
+        connected__clients.push_back(_client.remoteIP());
     }
-    return connected_clients;
+    return connected__clients;
 }
 
 void VXI_Server::disconnect_client(const IPAddress &ip)
 {
-    if (client && client.connected() && client.remoteIP() == ip) {
-        client.stop();
-        scpi_handler.release_control();
+    if (_client && _client.connected() && _client.remoteIP() == ip) {
+        _client.stop();
+        _scpi_handler->release_control();
     }
 }

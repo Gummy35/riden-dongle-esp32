@@ -7,8 +7,9 @@
 
 #include "utilities.h"
 #include "vxi_server.h"
-#include <ESP8266WiFi.h>
+#include <WiFi.h>
 #include <WiFiUdp.h>
+#include "wifi_ext.h"
 
   // class VXI_Server; // forward declaration
 
@@ -31,7 +32,7 @@ class RPC_Bind_Server
 
       @param  vs  A reference to the VXI_Server
     */
-    RPC_Bind_Server(VXI_Server &vs)
+    RPC_Bind_Server(VXI_Server* vs)
         : vxi_server(vs)
     {
     }
@@ -60,7 +61,7 @@ class RPC_Bind_Server
   protected:
     void process_request(bool onUDP);
 
-    VXI_Server &vxi_server; ///< Reference to the VXI_Server
+    VXI_Server* vxi_server; ///< Reference to the VXI_Server
     WiFiUDP udp;            ///< UDP server
     WiFiServer_ext tcp;     ///< TCP server
 };

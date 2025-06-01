@@ -1,8 +1,7 @@
 #pragma once
 
 #include "utilities.h"
-#include "wifi_ext.h"
-#include <ESP8266WiFi.h>
+#include <WiFi.h>
 #include <SCPI_Parser.h>
 #include <list>
 
@@ -37,14 +36,15 @@ class VXI_Server
     };
 
   public:
-    VXI_Server(SCPI_handler_interface &scpi_handler);
-    VXI_Server(SCPI_handler_interface &scpi_handler, uint32_t port_min, uint32_t port_max);
+    VXI_Server(SCPI_handler_interface* scpi_handler);
+    VXI_Server(SCPI_handler_interface* scpi_handler, uint32_t port_min, uint32_t port_max);
     ~VXI_Server();
 
     void loop();
     void begin(bool bNext = false);
     void begin_next() { begin(true); }
-    bool available() { return (!client); }
+    void advertiseMDNS();
+    bool available() { return (!_client); }
     uint32_t allocate();
     uint32_t port() { return vxi_port; }
     const char *get_visa_resource();
@@ -59,11 +59,11 @@ class VXI_Server
     bool handle_packet();
     void parse_scpi(char *buffer);
 
-    WiFiServer_ext tcp_server;
-    WiFiClient client;
+    WiFiServer _tcp_server;
+    WiFiClient _client;
     Read_Type read_type;
     uint32_t rw_channel;
     cyclic_uint32_t vxi_port;
-    SCPI_handler_interface &scpi_handler;
+    SCPI_handler_interface* _scpi_handler;
 };
 
