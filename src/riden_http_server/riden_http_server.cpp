@@ -4,6 +4,7 @@
 
 #include <ElegantOTA.h>
 #include <WebSerial.h>
+#include <RidenStatus.h>
 #include <Logger.h>
 #include <WifiManager.h>
 #include "http_static.h"
@@ -148,7 +149,8 @@ bool RidenHttpServer::begin()
                     { this->_onOTAEnd(success); });
 
     WebSerial.begin(_server);
-    ElegantOTA.begin(_server); // Start ElegantOTA
+    ElegantOTA.begin(_server);
+    RidenStatus.begin(_server, _modbus);
 
     _server->on("/status", HTTP_GET, [this](AsyncWebServerRequest *request)
                 { this->handle_root_get(request); });
@@ -186,6 +188,12 @@ void RidenHttpServer::_onOTAEnd(bool success)
   else
   {
     Serial.println("There was an error during OTA update!");
+    if (Update.hasError()) {        
+          uint8_t otaError = Update.getError();
+          const char* otaErrorStr = Update.errorString();
+          Serial.printf("OTA error %d : %s\n", otaError, otaErrorStr);
+          WebSerial.printf("OTA error %d : %s\n", otaError, otaErrorStr);
+    }
   }
   // <Add your own code here>
 }
@@ -302,6 +310,7 @@ void RidenHttpServer::loop(void)
     //_server->handleClient();
     WebSerial.loop();
     ElegantOTA.loop();
+    RidenStatus.loop();
 }
 
 uint16_t RidenHttpServer::port()
@@ -426,6 +435,7 @@ void RidenHttpServer::handle_psu_get(AsyncWebServerRequest *request)
     response->print("");
     request->send(response);
 }
+
 
 String RidenHttpServer::_htmlPsuConfigPageProcessor(const String &var)
 {

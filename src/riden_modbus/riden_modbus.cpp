@@ -115,6 +115,43 @@ String RidenModbus::get_type()
     return type;
 }
 
+bool RidenModbus::get_live_values(AllValues &all_values)
+{
+    Register last_reg = Register::M9_OCP;
+    int total_nof_regs = (+last_reg) + 1;
+    uint16_t values[total_nof_regs];
+    int first_reg_to_read = +Register::SystemTemperatureCelsius_Sign;
+    int regs_to_read = +Register::CurrentRange - first_reg_to_read;
+    if (!read_holding_registers(first_reg_to_read, &(values[first_reg_to_read]), regs_to_read)) {
+        return false;
+    }
+    first_reg_to_read = +Register::BatteryMode;
+    regs_to_read = +Register::WH_H - first_reg_to_read;
+    if (!read_holding_registers(first_reg_to_read, &(values[first_reg_to_read]), regs_to_read)) {
+        return false;
+    }
+    all_values.system_temperature_celsius = values_to_temperature(&(values[+Register::SystemTemperatureCelsius_Sign]));
+    all_values.system_temperature_fahrenheit = values_to_temperature(&(values[+Register::SystemTemperatureFarhenheit_Sign]));
+    all_values.voltage_set = value_to_voltage(values[+Register::VoltageSet]);
+    all_values.current_set = value_to_current(values[+Register::CurrentSet]);
+    all_values.voltage_out = value_to_voltage(values[+Register::VoltageOut]);
+    all_values.current_out = value_to_current(values[+Register::CurrentOut]);
+    all_values.power_out = values_to_power(&(values[+Register::PowerOut_H]));
+    all_values.voltage_in = value_to_voltage_in(values[+Register::VoltageIn]);
+    all_values.keypad_locked = values[+Register::Keypad] != 0;
+    all_values.protection = value_to_protection(values[+Register::Protection]);
+    all_values.output_mode = value_to_output_mode(values[+Register::OutputMode]);
+    all_values.output_on = values[+Register::Output] != 0;
+    all_values.current_range = values[+Register::CurrentRange];
+    all_values.is_battery_mode = values[+Register::BatteryMode] != 0;
+    all_values.voltage_battery = value_to_voltage(values[+Register::VoltageBattery]);
+    all_values.probe_temperature_celsius = values_to_temperature(&(values[+Register::ProbeTemperatureCelsius_Sign]));
+    all_values.probe_temperature_fahrenheit = values_to_temperature(&(values[+Register::ProbeTemperatureFarhenheit_Sign]));
+    all_values.ah = values_to_ah(&(values[+Register::AH_H]));
+    all_values.wh = values_to_wh(&(values[+Register::WH_H]));
+    return true;
+}
+
 bool RidenModbus::get_all_values(AllValues &all_values)
 {
     // Reading all registers at once fails silently, so

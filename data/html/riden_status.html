@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Statut du système</title>
+    <!-- Inclusion des bibliothèques nécessaires -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flot@4.2.2/dist/es5/jquery.flot.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flot@4.2.2/source/jquery.flot.time.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        .section {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #555;
+        }
+        .preset {
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .chart-container {
+	box-sizing: border-box;
+	width: 850px;
+	height: 450px;
+	padding: 20px 15px 15px 15px;
+	margin: 15px auto 30px auto;
+	border: 1px solid #ddd;
+	background: #fff;
+	background: linear-gradient(#f6f6f6 0, #fff 50px);
+	background: -o-linear-gradient(#f6f6f6 0, #fff 50px);
+	background: -ms-linear-gradient(#f6f6f6 0, #fff 50px);
+	background: -moz-linear-gradient(#f6f6f6 0, #fff 50px);
+	background: -webkit-linear-gradient(#f6f6f6 0, #fff 50px);
+	box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+	-o-box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+	-ms-box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+	-moz-box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+	-webkit-box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+	-webkit-tap-highlight-color: rgba(0,0,0,0);
+	-webkit-tap-highlight-color: transparent;
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	-khtml-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+        }
+        #combinedChart {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1>Statut du système</h1>
+
+    <div class="section">
+        <h2>Températures</h2>
+        <p>Température du système (Celsius): <span id="system_temperature_celsius">-</span></p>
+        <p>Température du système (Fahrenheit): <span id="system_temperature_fahrenheit">-</span></p>
+        <p>Température de la sonde (Celsius): <span id="probe_temperature_celsius">-</span></p>
+        <p>Température de la sonde (Fahrenheit): <span id="probe_temperature_fahrenheit">-</span></p>
+    </div>
+
+    <div class="section">
+        <h2>Graphique des Tensions et Courants</h2>
+        <div class="chart-container">
+            <div id="combinedChart"></div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Tensions et Courants</h2>
+        <p>Tension réglée: <span id="voltage_set">-</span> V</p>
+        <p>Courant réglé: <span id="current_set">-</span> A</p>
+        <p>Tension de sortie: <span id="voltage_out">-</span> V</p>
+        <p>Courant de sortie: <span id="current_out">-</span> A</p>
+        <p>Puissance de sortie: <span id="power_out">-</span> W</p>
+        <p>Tension d'entrée: <span id="voltage_in">-</span> V</p>
+    </div>
+
+    <div class="section" id="calibrationSection">
+        <h2>Calibration</h2>
+        <p>V_OUT_ZERO: <span id="V_OUT_ZERO">-</span></p>
+        <p>V_OUT_SCALE: <span id="V_OUT_SCALE">-</span></p>
+        <p>V_BACK_ZERO: <span id="V_BACK_ZERO">-</span></p>
+        <p>V_BACK_SCALE: <span id="V_BACK_SCALE">-</span></p>
+        <p>I_OUT_ZERO: <span id="I_OUT_ZERO">-</span></p>
+        <p>I_OUT_SCALE: <span id="I_OUT_SCALE">-</span></p>
+        <p>I_BACK_ZERO: <span id="I_BACK_ZERO">-</span></p>
+        <p>I_BACK_SCALE: <span id="I_BACK_SCALE">-</span></p>
+    </div>
+
+    <div class="section" id="presetsSection">
+        <h2>Préréglages</h2>
+        <div id="presets"></div>
+    </div>
+
+    <script>        
+            $(document).ready(function () {
+      const MAX_POINTS = 300;
+      const dataVoltageSet = Array(MAX_POINTS).fill(0);
+      const dataVoltageOut = Array(MAX_POINTS).fill(0);
+      const dataCurrentSet = Array(MAX_POINTS).fill(0);
+      const dataCurrentOut = Array(MAX_POINTS).fill(0);
+
+      function formatData(arr) {
+        return arr.map((y, i) => [i, y]);
+      }
+
+      const plot = $.plot("#combinedChart", [
+        { label: "Tension réglée (V)", data: formatData(dataVoltageSet), yaxis: 2, color: "#ff6384"},
+        { label: "Tension sortie (V)", data: formatData(dataVoltageOut), yaxis: 2, color: "#4bc0c0"},
+        { label: "Courant réglé (A)", data: formatData(dataCurrentSet), yaxis: 1, color: "#36a2eb"},
+        { label: "Courant sortie (A)", data: formatData(dataCurrentOut), yaxis: 1, color: "#9966ff"}
+      ], {
+        xaxis: {
+          min: 0,
+          max: MAX_POINTS - 1,
+          show: false
+        },
+        yaxes: [
+          { position: "left", axisLabel: "Courant (A)", min:0.0, max:6.0, autoscale: "loose", margin: 1 },
+          { position: "right", axisLabel: "Tension (V)", min:0.0, max:60.0, autoscale: "loose", margin: 1 }
+        ],
+        series: { lines: { show: true, ligneWidth: 5 }, shadowSize: 0 },
+        grid: { hoverable: true },
+        legend: { position: "ne" }
+      });
+
+      function pushData(vSet, vOut, cSet, cOut) {
+        dataVoltageSet.push(vSet); dataVoltageSet.shift();
+        dataVoltageOut.push(vOut); dataVoltageOut.shift();
+        dataCurrentSet.push(cSet); dataCurrentSet.shift();
+        dataCurrentOut.push(cOut); dataCurrentOut.shift();
+
+        plot.setData([
+          { label: "Tension réglée (V)", data: formatData(dataVoltageSet), yaxis: 2, color: "#ff6384"},
+          { label: "Tension sortie (V)", data: formatData(dataVoltageOut), yaxis: 2, color: "#4bc0c0"},
+          { label: "Courant réglé (A)", data: formatData(dataCurrentSet), yaxis: 1, color: "#36a2eb"},
+          { label: "Courant sortie (A)", data: formatData(dataCurrentOut), yaxis: 1, color: "#9966ff"}
+        ]);
+
+        plot.setupGrid(true);
+        plot.draw();
+      }
+
+              // Connexion WebSocket
+        //const socket = new WebSocket('ws://' + window.location.hostname + '/ws_ridenstatus');
+        const socket = new WebSocket('ws://192.168.100.186/ws_ridenstatus');
+
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            const now = new Date().getTime();
+
+            pushData(parseFloat(data.voltage_set), parseFloat(data.voltage_out), parseFloat(data.current_set), parseFloat(data.current_out));
+
+            // Mise à jour des valeurs affichées
+            document.getElementById('system_temperature_celsius').textContent = data.system_temperature_celsius;
+            document.getElementById('system_temperature_fahrenheit').textContent = data.system_temperature_fahrenheit;
+            document.getElementById('probe_temperature_celsius').textContent = data.probe_temperature_celsius;
+            document.getElementById('probe_temperature_fahrenheit').textContent = data.probe_temperature_fahrenheit;
+            document.getElementById('voltage_set').textContent = data.voltage_set;
+            document.getElementById('current_set').textContent = data.current_set;
+            document.getElementById('voltage_out').textContent = data.voltage_out;
+            document.getElementById('current_out').textContent = data.current_out;
+            document.getElementById('power_out').textContent = data.power_out;
+            document.getElementById('voltage_in').textContent = data.voltage_in;
+
+            // Mise à jour de la section Calibration
+            if (data.calibration) {
+                document.getElementById('V_OUT_ZERO').textContent = data.calibration.V_OUT_ZERO;
+                document.getElementById('V_OUT_SCALE').textContent = data.calibration.V_OUT_SCALE;
+                document.getElementById('V_BACK_ZERO').textContent = data.calibration.V_BACK_ZERO;
+                document.getElementById('V_BACK_SCALE').textContent = data.calibration.V_BACK_SCALE;
+                document.getElementById('I_OUT_ZERO').textContent = data.calibration.I_OUT_ZERO;
+                document.getElementById('I_OUT_SCALE').textContent = data.calibration.I_OUT_SCALE;
+                document.getElementById('I_BACK_ZERO').textContent = data.calibration.I_BACK_ZERO;
+                document.getElementById('I_BACK_SCALE').textContent = data.calibration.I_BACK_SCALE;
+                document.getElementById('calibrationSection').style.display = 'block';
+            } else {
+                document.getElementById('calibrationSection').style.display = 'none';
+            }
+
+            // Mise à jour de la section Préréglages
+            if (data.presets) {
+                const presetsContainer = document.getElementById('presets');
+                presetsContainer.innerHTML = '';
+                data.presets.forEach(function(preset, index) {
+                    const presetDiv = document.createElement('div');
+                    presetDiv.className = 'preset';
+                    presetDiv.innerHTML = '<h3>Préréglage ' + (index + 1) + '</h3>' +
+                                          '<p>Tension: ' + preset.voltage + ' V</p>' +
+                                          '<p>Courant: ' + preset.current + ' A</p>';
+                    presetsContainer.appendChild(presetDiv);
+                });
+                document.getElementById('presetsSection').style.display = 'block';
+            } else {
+                document.getElementById('presetsSection').style.display = 'none';
+            }
+        };
+
+     
+    });
+       
+    </script>
+</body>
+</html>

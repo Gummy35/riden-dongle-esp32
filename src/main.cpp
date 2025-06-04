@@ -21,6 +21,7 @@
 #include <time.h>
 #include <vxi11_server/rpc_bind_server.h>
 #include <vxi11_server/vxi_server.h>
+#include <RidenStatus.h>
 
 #include "soc/rtc_cntl_reg.h"
 #include "soc/soc.h"
@@ -156,6 +157,8 @@ void InitServices()
         vxi_server->begin();
         LOG_LN("RPC Bind server");
         rpc_bind_server->begin();
+        LOG_LN("Status update worker");
+        RidenStatus.start();
         LOG_LN("Service initialization complete");
         // turn off led
         led_ticker.detach();
