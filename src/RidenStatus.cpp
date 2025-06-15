@@ -122,11 +122,7 @@ void RidenStatusClass::sendStatus()
 
 bool RidenStatusClass::updateStatus(bool full)
 {
-  if (full)
-    return _modbus->get_all_values(_allValues);
-  else {
-    return _modbus->get_live_values(_allValues);
-  }
+    return _modbus->get_all_values(_allValues, !full);
 }
 
 void RidenStatusClass::end()

@@ -7,6 +7,7 @@
 #include <ESPmDNS.h>
 #include <LittleFS.h>
 #include <Logger.h>
+#include <RidenStatus.h>
 #include <Ticker.h>
 #include <WebSerial.h>
 #include <WiFi.h>
@@ -21,7 +22,6 @@
 #include <time.h>
 #include <vxi11_server/rpc_bind_server.h>
 #include <vxi11_server/vxi_server.h>
-#include <RidenStatus.h>
 
 #include "soc/rtc_cntl_reg.h"
 #include "soc/soc.h"
@@ -45,6 +45,10 @@ static bool did_update_time = false;
 
 static bool connected = false;
 volatile bool isSafemode = false;
+static bool useEnPin = false;
+static int enPin = 5;
+volatile byte enPinState = LOW;
+volatile bool enPinStateChanged = false;
 
 RidenModbus *riden_modbus = new RidenModbus();                                                           ///< The modbus server
 RidenScpi *riden_scpi = new RidenScpi(riden_modbus);                                                     ///< The raw socket server + the SCPI command handler
@@ -111,26 +115,8 @@ static bool SetupWifi(const char *hostname)
     return wifi_connected;
 }
 
-/// @brief Init
-void InitServices()
+bool StartServices()
 {
-    byte devId = 0;
-
-    // set default logger callback
-    Logger.SetLogger([](const char *logString) {
-        WebSerial.println(logString);
-    });
-
-    // Wait for serial
-    // Serial.begin(115200);
-    Serial.begin(9600);
-    while (!Serial)
-        delay(10);
-
-    LOG_LN(ESP.getSdkVersion());
-
-    riden_config.begin();
-
     // Wait for power supply firmware to boot
     unsigned long boot_delay_start = millis();
     while (!riden_modbus->begin()) {
@@ -184,6 +170,29 @@ void InitServices()
         led_ticker.attach(0.1, tick);
         connected = false;
     }
+    return connected;
+}
+
+/// @brief Init
+bool InitServices()
+{
+    byte devId = 0;
+
+    // set default logger callback
+    Logger.SetLogger([](const char *logString) {
+        WebSerial.println(logString);
+    });
+
+    // Wait for serial
+    // Serial.begin(115200);
+    Serial.begin(9600);
+    while (!Serial)
+        delay(10);
+
+    LOG_LN(ESP.getSdkVersion());
+
+    riden_config.begin();
+    return StartServices();
 }
 
 void PrintFreeRam()
@@ -194,6 +203,50 @@ void PrintFreeRam()
                      info.total_free_bytes,    // total currently free in all non-continues blocks
                      info.minimum_free_bytes,  // minimum free ever
                      info.largest_free_block); // largest continues block to allocate big array
+}
+
+void DisplayServicesStatus()
+{
+    String status = "modbus : ";
+    if (riden_modbus == nullptr) {
+        status.concat("stopped");
+    } else {
+        status.concat("started, ");
+        if (!riden_modbus->is_connected())
+            status.concat("device unreachable");
+        else
+            status.concat("device connected");
+    }
+
+    status.concat("\nSCPI : ");
+    if (riden_scpi == nullptr)
+        status.concat("stopped");
+    else
+        status.concat("started");
+
+    status.concat("\nVXI : ");
+    if (vxi_server == nullptr) {
+        status.concat("stopped");
+    } else {
+        status.concat("started, ");
+        if (vxi_server->available())
+            status.concat("available");
+        else
+            status.concat("busy (client connected)");
+    }
+
+    status.concat("\nRPC bind server : ");
+    if (rpc_bind_server == nullptr)
+        status.concat("stopped");
+    else
+        status.concat("started");
+
+    status.concat("\nHttp Server : ");
+    if (http_server == nullptr)
+        status.concat("stopped");
+    else
+        status.concat("started");
+    WebSerial.println(status);
 }
 
 /// @brief setup Web serial commands handling
@@ -213,6 +266,7 @@ void SetupWebSerialCommands()
             else {
                 WebSerial.println("safemode : enter safemode at next boot");
                 WebSerial.println("scpi : scpi commands");
+                WebSerial.println("svc : manage services");
             }
             WebSerial.println("reboot : reboot dongle");
         } else if (d.equals("freeram")) {
@@ -286,13 +340,42 @@ void SetupWebSerialCommands()
                         WebSerial.println("SCPI : could not process command");
                     }
                 }
+            } else if (d.startsWith("svc")) {
+                String subcommand = d.substring(3);
+                subcommand.trim();
+                if ((subcommand.equals("")) || subcommand.equals("help")) {
+                    WebSerial.println("svc help : display this help");
+                    WebSerial.println("svc status : display services status");
+                    WebSerial.println("svc start : start services");
+                    WebSerial.println("svc stop : stop services");
+                } else if (subcommand.equals("status")) {
+                    DisplayServicesStatus();
+                } else if (subcommand.equals("stop")) {
+//                    free(http_server);
+                //     free(rpc_bind_server);
+                //     free(scpi_handler);
+                //     free(modbus_bridge);
+                //     free(riden_scpi);                    
+                //     free(riden_modbus);
+                } else if (subcommand.equals("start"))
+                {
+                    bool started = StartServices();
+                    DisplayServicesStatus();
+                }
+
+                // RidenScpi *riden_scpi = new RidenScpi(riden_modbus);                                                     ///< The raw socket server + the SCPI command handler
+                // RidenModbusBridge *modbus_bridge = new RidenModbusBridge(riden_modbus);                                  ///< The modbus TCP server
+                // SCPI_handler *scpi_handler = new SCPI_handler(riden_scpi);                                               ///< The bridge from the vxi server to the SCPI command handler
+                // VXI_Server *vxi_server = new VXI_Server(scpi_handler);                                                   ///< The vxi server
+                // RPC_Bind_Server *rpc_bind_server = new RPC_Bind_Server(vxi_server);                                      ///< The RPC_Bind_Server for the vxi server
+                // RidenHttpServer *http_server = new RidenHttpServer(riden_modbus, riden_scpi, modbus_bridge, vxi_server); ///< The web server
             }
         } else if (isSafemode && d.equals("boot")) {
-            isSafemode = false;
+        isSafemode = false;
         }
 
         debug(WebSerial.printf("%d ms\n", millis() - ts));
-    });
+});
 }
 
 void failsafeMode()
@@ -303,6 +386,12 @@ void failsafeMode()
         http_server->loop();
         delay(5);
     }
+}
+
+void enPinStateChangeIntrHandler()
+{
+    enPinState = digitalRead(enPin);
+    enPinStateChanged = true;
 }
 
 void setup()
@@ -349,8 +438,19 @@ void setup()
         }
     }
 
+#ifdef ENABLE_RD_EN_DETECT
+    useEnPin = true;
+#endif
+
+    if (useEnPin) {
+#ifdef RD_EN_PIN
+        enPin = RD_EN_PIN;
+#endif
+
+        attachInterrupt(digitalPinToInterrupt(enPin), enPinStateChangeIntrHandler, CHANGE);
+    }
     // init devices
-    InitServices();
+    bool initRes = InitServices();
     // Logger.Log("v1.4");
 
     // create FreeRTOS tasks
@@ -393,6 +493,17 @@ void loop()
     }
     http_server->loop();
     delay(5);
+    if (enPinStateChanged) {
+        delay(100);
+        enPinStateChanged = false;
+        if (enPinState) {
+            WebSerial.println("RD EN Pin activated");
+            if (!connected)
+                StartServices();
+        } else {
+            WebSerial.println("RD EN Pin deactivated");
+        }
+    }
 }
 
 void tick()
