@@ -79,19 +79,21 @@ String RidenStatusClass::_serializeAllValues(const RidenDongle::AllValues& value
     doc["probe_temperature_fahrenheit"] = values.probe_temperature_fahrenheit;
     doc["ah"] = values.ah;
     doc["wh"] = values.wh;
-    //Note: La structure `tm` n'est pas directement sérialisable, vous devrez la convertir en un format approprié
-    doc["clock"] = "clock_data"; // Remplacez par une conversion appropriée de `tm` en chaîne
+    doc["voltage_max"] = _modbus->get_max_voltage();
+    doc["current_max"] = _modbus->get_max_current();
+    // char buf[64];
+    // strftime(buf, 64, "%c", &values.clock);
+    //doc["clock"] =  buf; 
 
-    // Sérialiser la structure Calibration
-    JsonObject calibration = doc.createNestedObject("calibration");
-    calibration["V_OUT_ZERO"] = values.calibration.V_OUT_ZERO;
-    calibration["V_OUT_SCALE"] = values.calibration.V_OUT_SCALE;
-    calibration["V_BACK_ZERO"] = values.calibration.V_BACK_ZERO;
-    calibration["V_BACK_SCALE"] = values.calibration.V_BACK_SCALE;
-    calibration["I_OUT_ZERO"] = values.calibration.I_OUT_ZERO;
-    calibration["I_OUT_SCALE"] = values.calibration.I_OUT_SCALE;
-    calibration["I_BACK_ZERO"] = values.calibration.I_BACK_ZERO;
-    calibration["I_BACK_SCALE"] = values.calibration.I_BACK_SCALE;
+    // JsonObject calibration = doc.createNestedObject("calibration");
+    // calibration["V_OUT_ZERO"] = values.calibration.V_OUT_ZERO;
+    // calibration["V_OUT_SCALE"] = values.calibration.V_OUT_SCALE;
+    // calibration["V_BACK_ZERO"] = values.calibration.V_BACK_ZERO;
+    // calibration["V_BACK_SCALE"] = values.calibration.V_BACK_SCALE;
+    // calibration["I_OUT_ZERO"] = values.calibration.I_OUT_ZERO;
+    // calibration["I_OUT_SCALE"] = values.calibration.I_OUT_SCALE;
+    // calibration["I_BACK_ZERO"] = values.calibration.I_BACK_ZERO;
+    // calibration["I_BACK_SCALE"] = values.calibration.I_BACK_SCALE;
 
     doc["is_take_ok"] = values.is_take_ok;
     doc["is_take_out"] = values.is_take_out;

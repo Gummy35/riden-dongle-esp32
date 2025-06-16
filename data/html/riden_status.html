@@ -6,11 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Riden Controller - PSU Status</title>
   <link rel="stylesheet" href="/static/style.css">
-  <!-- <link rel="stylesheet" href="http://192.168.100.186/static/style.css"> -->
+  <!--link rel="stylesheet" href="http://192.168.100.186/static/style.css"-->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-tooltip"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-streaming@2.0.0"></script>
 
   <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
@@ -30,7 +29,7 @@
 
     #presetTable th,
     #presetTable td {
-      padding: 12px 15px;
+      padding: 5px 10px;
       text-align: center;
       color: #fff;
       border-bottom: 1px solid #ddd;
@@ -88,8 +87,8 @@
       padding: 10px;
       margin: 10px;
       background-color: #1b1b1b;
-      resize: both;
-      overflow: auto;
+      resize: none !important;
+      overflow: hidden;
       position: relative;
       width: 200px;
     }
@@ -108,6 +107,8 @@
       box-sizing: border-box;
     }
 
+
+
     .drag-handle {
       cursor: move;
       margin: 0;
@@ -122,53 +123,62 @@
       max-width: 800px;
       max-height: 400px;
     }
+
+    .resize-handle {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      right: 4px;
+      bottom: 4px;
+      pointer-events: none;
+      /* pour laisser interact.js gérer le resize */
+      background-image:
+        linear-gradient(135deg, transparent 50%, #ff4500 50%),
+        linear-gradient(135deg, transparent 60%, #ff4500 60%),
+        linear-gradient(135deg, transparent 70%, #ff4500 70%);
+      background-repeat: no-repeat;
+      background-position: bottom right;
+      background-size: 100% 100%;
+      opacity: 0.6;
+    }
   </style>
 </head>
 
 <body>
   <h1>PSU Status</h1>
-  <button id="resetLayoutBtn" style="margin-bottom: 10px;">Réinitialiser la disposition</button>
+  <button id="resetLayoutBtn" style="margin-bottom: 10px;">Reset Layout</button>
   <div id="root">
     <div id="temperaturesContainer" class="control-panel draggable resizable">
 
       <h3 class="drag-handle">Temperatures</h3>
-      <p>System temp (°C): <span id="system_temperature_celsius">-</span></p>
-      <p>System temp (°F): <span id="system_temperature_fahrenheit">-</span></p>
-      <p>Probe temp (°C): <span id="probe_temperature_celsius">-</span></p>
-      <p>Probe temp (°F): <span id="probe_temperature_fahrenheit">-</span></p>
+      <p>System temp : <span id="system_temperature_celsius">-</span>°C / <span
+          id="system_temperature_fahrenheit">-</span>°F</p>
+      <p>Probe temp : <span id="probe_temperature_celsius">-</span>°C / <span
+          id="probe_temperature_fahrenheit">-</span>°F</p>
+      <div class="resize-handle"></div>
     </div>
 
 
     <div id="sensorChartContainer" class="control-panel draggable resizable">
       <h3 class="drag-handle">Realtime status</h3>
       <canvas id="sensorChart"></canvas>
+      <div class="resize-handle"></div>
     </div>
 
-
-
-    <div class="section">
-      <h2>Voltage & Current</h2>
+    <div id="powerSection" class="control-panel draggable resizable">
+      <h3 class="drag-handle">Voltage & Current</h3>
       <p>Set Voltage: <span id="voltage_set">-</span> V</p>
       <p>Set Current: <span id="current_set">-</span> A</p>
       <p>Output Voltage: <span id="voltage_out">-</span> V</p>
       <p>Output Current: <span id="current_out">-</span> A</p>
+      <p>Max Voltage: <span id="voltage_max">-</span> V</p>
+      <p>Max Current: <span id="current_max">-</span> A</p>
       <p>Output Power: <span id="power_out">-</span> W</p>
       <p>Input Voltage: <span id="voltage_in">-</span> V</p>
+      <div class="resize-handle"></div>
     </div>
 
-    <div class="section" id="calibrationSection">
-      <h2>Calibration</h2>
-      <p>V_OUT_ZERO: <span id="V_OUT_ZERO">-</span></p>
-      <p>V_OUT_SCALE: <span id="V_OUT_SCALE">-</span></p>
-      <p>V_BACK_ZERO: <span id="V_BACK_ZERO">-</span></p>
-      <p>V_BACK_SCALE: <span id="V_BACK_SCALE">-</span></p>
-      <p>I_OUT_ZERO: <span id="I_OUT_ZERO">-</span></p>
-      <p>I_OUT_SCALE: <span id="I_OUT_SCALE">-</span></p>
-      <p>I_BACK_ZERO: <span id="I_BACK_ZERO">-</span></p>
-      <p>I_BACK_SCALE: <span id="I_BACK_SCALE">-</span></p>
-    </div>
-
-    <div class="section control-panel draggable resizable" id="presetsSection">
+    <div class="control-panel draggable resizable" id="presetsSection">
       <h3 class="drag-handle">Presets</h3>
       <table id="presetTable">
         <thead>
@@ -182,32 +192,22 @@
         </thead>
         <tbody id="presetBody"></tbody>
       </table>
+      <div class="resize-handle"></div>
     </div>
 
-
-    <div id="knobContainer" class="control-panel draggable resizable">
-      <h3 class="drag-handle">Voltage Knob</h3>
-      <canvas id="voltageKnob" width="100" height="100"></canvas>
-      <p>Voltage: <span id="knobValue">0</span> V</p>
-    </div>
-
-    <div id="sliderContainer" class="control-panel draggable resizable">
-      <h3 class="drag-handle">Current Slider</h3>
-      <input type="range" id="currentSlider" min="0" max="5" step="0.1" />
-      <p>Current: <span id="sliderValue">0</span> A</p>
-    </div>
 
     <div id="modeContainer" class="control-panel draggable resizable">
       <h3 class="drag-handle">Mode</h3>
       <label><input type="radio" name="mode" value="CV" checked /> Constant Voltage (CV)</label><br>
       <label><input type="radio" name="mode" value="CC" /> Constant Current (CC)</label>
+      <div class="resize-handle"></div>
     </div>
 
   </div>
   <script>
     $(document).ready(function () {
       const ctx = document.getElementById('sensorChart').getContext('2d');
-
+      Chart.register(ChartStreaming);
       const chart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -221,7 +221,10 @@
               yAxisID: 'y-left',
               tension: 0.2,
               borderWidth: 1,
-              cubicInterpolationMode: 'monotone'
+              cubicInterpolationMode: 'monotone',
+              pointRadius: 0,
+              hitRadius: 5,
+              hoverRadius: 0
             },
             {
               label: 'Output Voltage (V)',
@@ -231,7 +234,10 @@
               yAxisID: 'y-left',
               tension: 0.2,
               borderWidth: 1,
-              cubicInterpolationMode: 'monotone'
+              cubicInterpolationMode: 'monotone',
+              pointRadius: 0,
+              hitRadius: 5,
+              hoverRadius: 0
             },
             {
               label: 'Set Current (A)',
@@ -241,7 +247,10 @@
               yAxisID: 'y-right',
               tension: 0.2,
               borderWidth: 1,
-              cubicInterpolationMode: 'monotone'
+              cubicInterpolationMode: 'monotone',
+              pointRadius: 0,
+              hitRadius: 5,
+              hoverRadius: 0
             },
             {
               label: 'Output Current (A)',
@@ -251,7 +260,10 @@
               yAxisID: 'y-right',
               tension: 0.2,
               borderWidth: 1,
-              cubicInterpolationMode: 'monotone'
+              cubicInterpolationMode: 'monotone',
+              pointRadius: 0,
+              hitRadius: 5,
+              hoverRadius: 0
             }
           ]
         },
@@ -339,7 +351,7 @@
 
           const min = 0;
           const max = Math.max(...values);
-          const range = max - min || 1; // évite range 0
+          const range = max - min || 1;
           const margin = range * 0.2;
 
           const axis = chart.options.scales[dataset.yAxisID];
@@ -359,21 +371,8 @@
         document.getElementById('current_out').textContent = data.current_out;
         document.getElementById('power_out').textContent = data.power_out;
         document.getElementById('voltage_in').textContent = data.voltage_in;
-
-        if (data.calibration) {
-          document.getElementById('V_OUT_ZERO').textContent = data.calibration.V_OUT_ZERO;
-          document.getElementById('V_OUT_SCALE').textContent = data.calibration.V_OUT_SCALE;
-          document.getElementById('V_BACK_ZERO').textContent = data.calibration.V_BACK_ZERO;
-          document.getElementById('V_BACK_SCALE').textContent = data.calibration.V_BACK_SCALE;
-          document.getElementById('I_OUT_ZERO').textContent = data.calibration.I_OUT_ZERO;
-          document.getElementById('I_OUT_SCALE').textContent = data.calibration.I_OUT_SCALE;
-          document.getElementById('I_BACK_ZERO').textContent = data.calibration.I_BACK_ZERO;
-          document.getElementById('I_BACK_SCALE').textContent = data.calibration.I_BACK_SCALE;
-          document.getElementById('calibrationSection').style.display = 'block';
-        } else {
-          document.getElementById('calibrationSection').style.display = 'none';
-        }
-
+        document.getElementById('voltage_max').textContent = data.voltage_max;
+        document.getElementById('current_max').textContent = data.current_max;
 
         const tableBody = document.getElementById("presetBody");
         tableBody.innerHTML = "";
@@ -393,17 +392,26 @@
       };
 
 
-      const SNAP_DISTANCE = 15;
-      const GRID_SIZE = 20;
+
+
+      const GRID_SIZE = 10;
       const defaultLayout = {
         "temperaturesContainer": {
-          "x": 560, "y": -23, "width": 220, "height": 199
+          "x": 150, "y": 7.133331298828125, "width": 340, "height": 110
         },
         "sensorChartContainer": {
-          "x": -610, "y": -80, "width": 454, "height": 466
+          "x": -530, "y": 7.133331298828125, "width": 450, "height": 460
+        },
+        "powerSection": {
+          "x": -70, "y": 7.133331298828125, "width": 210, "height": 310
+        },
+        "presetsSection": {
+          "x": 150, "y": 127.13333129882812, "width": 340, "height": 340
+        },
+        "modeContainer": {
+          "x": -70, "y": 327.1333312988281, "width": 210, "height": 140
         }
-      };
-
+      }
 
       function saveLayout() {
         const layout = {};
@@ -423,8 +431,13 @@
 
       function loadLayout(jsonLayout) {
         let layout = jsonLayout;
-        if (!layout)
-          layout = JSON.parse(localStorage.getItem('layout') || '{}');
+        if (!layout) {
+          let localStorageLayout = localStorage.getItem('layout');
+          if (localStorageLayout)
+            layout = JSON.parse(localStorageLayout || '{}');
+          else
+            layout = defaultLayout;
+        }
         for (const id in layout) {
           const el = document.getElementById(id);
           if (!el) continue;
@@ -442,24 +455,24 @@
         .draggable({
           allowFrom: '.drag-handle',
           modifiers: [
-
             interact.modifiers.snap({
-              targets: [interact.snappers.grid({ x: 10, y: 10 })],
+              targets: [interact.snappers.grid({ x: GRID_SIZE, y: GRID_SIZE })],
               range: Infinity,
-              relativePoints: [
-                { x: 0, y: 0 },
-              ],
-              offset: "self",
+              relativePoints: [{ x: 0, y: 0 }]
+              // PAS d'offset du tout
             })
           ],
 
+
           autoScroll: true,
           listeners: {
+
             move(event) {
               const target = event.target;
               const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
               const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
-              target.style.transform = 'translate(' + x + 'px, ' + y + 'px)'
+
+              target.style.transform = `translate(${x}px, ${y}px)`;
               target.setAttribute('data-x', x);
               target.setAttribute('data-y', y);
             },
@@ -469,21 +482,26 @@
           }
         })
         .resizable({
-          edges: { left: true, right: true, top: true, bottom: true },
+          edges: { left: false, right: true, top: false, bottom: true },
           listeners: {
             move(event) {
-              var target = event.target;
-              var x = (parseFloat(target.getAttribute('data-x')) || 0);
-              var y = (parseFloat(target.getAttribute('data-y')) || 0);
+              const target = event.target;
+              let x = parseFloat(target.getAttribute('data-x')) || 0;
+              let y = parseFloat(target.getAttribute('data-y')) || 0;
 
-              target.style.width = event.rect.width + 'px';
-              target.style.height = event.rect.height + 'px';
+              const rawWidth = event.rect.width;
+              const rawHeight = event.rect.height;
 
-              x += event.deltaRect.left
-              y += event.deltaRect.top
+              const snappedWidth = Math.round(rawWidth / GRID_SIZE) * GRID_SIZE;
+              const snappedHeight = Math.round(rawHeight / GRID_SIZE) * GRID_SIZE;
 
-              target.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+              target.style.width = `${snappedWidth}px`;
+              target.style.height = `${snappedHeight}px`;
 
+              x += event.deltaRect.left;
+              y += event.deltaRect.top;
+
+              target.style.transform = `translate(${x}px, ${y}px)`;
               target.setAttribute('data-x', x);
               target.setAttribute('data-y', y);
             },
@@ -493,66 +511,10 @@
           }
         });
 
-
-      const slider = document.getElementById('currentSlider');
-      const sliderValue = document.getElementById('sliderValue');
-      slider.addEventListener('input', () => {
-        sliderValue.textContent = slider.value;
-
-      });
-
-      const knobCanvas = document.getElementById('voltageKnob');
-      const knobCtx = knobCanvas.getContext('2d');
-      let knobAngle = 0;
-
-      function drawKnob() {
-        knobCtx.clearRect(0, 0, 100, 100);
-        knobCtx.beginPath();
-        knobCtx.arc(50, 50, 40, 0, Math.PI * 2);
-        knobCtx.strokeStyle = '#ff4500';
-        knobCtx.lineWidth = 5;
-        knobCtx.stroke();
-
-        const x = 50 + 30 * Math.cos(knobAngle - Math.PI / 2);
-        const y = 50 + 30 * Math.sin(knobAngle - Math.PI / 2);
-        knobCtx.beginPath();
-        knobCtx.moveTo(50, 50);
-        knobCtx.lineTo(x, y);
-        knobCtx.strokeStyle = '#fff';
-        knobCtx.lineWidth = 3;
-        knobCtx.stroke();
-      }
-
-      function updateKnobValue(angle) {
-        const voltage = Math.round((angle / (2 * Math.PI)) * 60); // 0-60 V
-        document.getElementById('knobValue').textContent = voltage;
-      }
-
-      knobCanvas.addEventListener('mousedown', startDrag);
-      let dragging = false;
-
-      function startDrag(e) {
-        dragging = true;
-      }
-
-      window.addEventListener('mouseup', () => dragging = false);
-      knobCanvas.addEventListener('mousemove', e => {
-        if (!dragging) return;
-        const rect = knobCanvas.getBoundingClientRect();
-        const x = e.clientX - rect.left - 50;
-        const y = e.clientY - rect.top - 50;
-        knobAngle = Math.atan2(y, x) + Math.PI / 2;
-        if (knobAngle < 0) knobAngle += 2 * Math.PI;
-        drawKnob();
-        updateKnobValue(knobAngle);
-      });
-
       document.getElementById('resetLayoutBtn').addEventListener('click', function () {
         loadLayout(defaultLayout);
         saveLayout();
       });
-
-      drawKnob();
 
       loadLayout();
 
