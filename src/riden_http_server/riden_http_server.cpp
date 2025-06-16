@@ -195,54 +195,6 @@ void RidenHttpServer::_onOTAEnd(bool success)
           WebSerial.printf("OTA error %d : %s\n", otaError, otaErrorStr);
     }
   }
-  // <Add your own code here>
-}
-
-void RidenHttpServer::_handleGetJsonFile(AsyncWebServerRequest *request, const char *filename)
-{
-  if (LittleFS.exists(filename))
-    request->send(LittleFS, filename, "application/json");
-  else
-    request->send(200, "application/json", "{}");
-}
-
-void RidenHttpServer::_saveJsonToFile(AsyncWebServerRequest *request, JsonVariant &json, const char *filename)
-{
-  JsonDocument data;
-  if (json.is<JsonArray>())
-  {
-    data = json.as<JsonArray>();
-  }
-  else if (json.is<JsonObject>())
-  {
-    data = json.as<JsonObject>();
-  }
-
-  File file = LittleFS.open(filename, "w");
-  if (!file)
-  {
-    Logger.Log("Failed to open file for writing");
-    request->send(500, "application/json", "{error:\"Failed to open file for writing\"}");
-    return;
-  }
-
-  if (serializeJson(data, file) == 0)
-  {
-    Logger.Log("Failed to write to file");
-    request->send(500, "application/json", "{error:\"Failed to write to file\"}");
-    file.close();
-    return;
-  }
-
-  file.close();
-  // String response;
-  // serializeJson(data, response);
-  // request->send(200, "application/json", response);
-  // Serial.println(response);
-  Logger.Log("Config saved. Restarting...");
-  request->send(200, "text/plain", "file saved");
-  LittleFS.end();
-  ESP.restart();
 }
 
 void RidenHttpServer::_handleSaveWiFi(AsyncWebServerRequest *request)

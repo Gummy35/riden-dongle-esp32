@@ -1,6 +1,5 @@
 #include "RidenStatus.h"
 #include <assert.h>
-#include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <riden_modbus/riden_modbus_registers.h>
 
@@ -57,65 +56,57 @@ void RidenStatusClass::loop()
   }
 }
 
-String RidenStatusClass::_serializeAllValues(const RidenDongle::AllValues& values) {
-    JsonDocument doc;
+String RidenStatusClass::_serializeAllValues(const RidenDongle::AllValues& v) {
+    String json = "{";
 
-    doc["system_temperature_celsius"] = values.system_temperature_celsius;
-    doc["system_temperature_fahrenheit"] = values.system_temperature_fahrenheit;
-    doc["voltage_set"] = values.voltage_set;
-    doc["current_set"] = values.current_set;
-    doc["voltage_out"] = values.voltage_out;
-    doc["current_out"] = values.current_out;
-    doc["power_out"] = values.power_out;
-    doc["voltage_in"] = values.voltage_in;
-    doc["keypad_locked"] = values.keypad_locked;
-    doc["protection"] = static_cast<int>(values.protection);
-    doc["output_mode"] = static_cast<int>(values.output_mode);
-    doc["output_on"] = values.output_on;
-    doc["current_range"] = values.current_range;
-    doc["is_battery_mode"] = values.is_battery_mode;
-    doc["voltage_battery"] = values.voltage_battery;
-    doc["probe_temperature_celsius"] = values.probe_temperature_celsius;
-    doc["probe_temperature_fahrenheit"] = values.probe_temperature_fahrenheit;
-    doc["ah"] = values.ah;
-    doc["wh"] = values.wh;
-    doc["voltage_max"] = _modbus->get_max_voltage();
-    doc["current_max"] = _modbus->get_max_current();
-    // char buf[64];
-    // strftime(buf, 64, "%c", &values.clock);
-    //doc["clock"] =  buf; 
+    // Scalars
+    json += "\"system_temperature_celsius\":" + String(v.system_temperature_celsius) + ",";
+    json += "\"system_temperature_fahrenheit\":" + String(v.system_temperature_fahrenheit) + ",";
+    json += "\"voltage_set\":" + String(v.voltage_set) + ",";
+    json += "\"current_set\":" + String(v.current_set) + ",";
+    json += "\"voltage_out\":" + String(v.voltage_out) + ",";
+    json += "\"current_out\":" + String(v.current_out) + ",";
+    json += "\"power_out\":" + String(v.power_out) + ",";
+    json += "\"voltage_in\":" + String(v.voltage_in) + ",";
+    json += "\"keypad_locked\":" + String(v.keypad_locked ? "true" : "false") + ",";
+    json += "\"protection\":" + String(static_cast<int>(v.protection)) + ",";
+    json += "\"output_mode\":" + String(static_cast<int>(v.output_mode)) + ",";
+    json += "\"output_on\":" + String(v.output_on ? "true" : "false") + ",";
+    json += "\"current_range\":" + String(v.current_range) + ",";
+    json += "\"is_battery_mode\":" + String(v.is_battery_mode ? "true" : "false") + ",";
+    json += "\"voltage_battery\":" + String(v.voltage_battery) + ",";
+    json += "\"probe_temperature_celsius\":" + String(v.probe_temperature_celsius) + ",";
+    json += "\"probe_temperature_fahrenheit\":" + String(v.probe_temperature_fahrenheit) + ",";
+    json += "\"ah\":" + String(v.ah) + ",";
+    json += "\"wh\":" + String(v.wh) + ",";
+    json += "\"voltage_max\":" + String(_modbus->get_max_voltage()) + ",";
+    json += "\"current_max\":" + String(_modbus->get_max_current()) + ",";
+    json += "\"is_take_ok\":" + String(v.is_take_ok ? "true" : "false") + ",";
+    json += "\"is_take_out\":" + String(v.is_take_out ? "true" : "false") + ",";
+    json += "\"is_power_on_boot\":" + String(v.is_power_on_boot ? "true" : "false") + ",";
+    json += "\"is_buzzer_enabled\":" + String(v.is_buzzer_enabled ? "true" : "false") + ",";
+    json += "\"is_logo\":" + String(v.is_logo ? "true" : "false") + ",";
+    json += "\"language\":" + String(v.language) + ",";
+    json += "\"brightness\":" + String(v.brightness) + ",";
 
-    // JsonObject calibration = doc.createNestedObject("calibration");
-    // calibration["V_OUT_ZERO"] = values.calibration.V_OUT_ZERO;
-    // calibration["V_OUT_SCALE"] = values.calibration.V_OUT_SCALE;
-    // calibration["V_BACK_ZERO"] = values.calibration.V_BACK_ZERO;
-    // calibration["V_BACK_SCALE"] = values.calibration.V_BACK_SCALE;
-    // calibration["I_OUT_ZERO"] = values.calibration.I_OUT_ZERO;
-    // calibration["I_OUT_SCALE"] = values.calibration.I_OUT_SCALE;
-    // calibration["I_BACK_ZERO"] = values.calibration.I_BACK_ZERO;
-    // calibration["I_BACK_SCALE"] = values.calibration.I_BACK_SCALE;
-
-    doc["is_take_ok"] = values.is_take_ok;
-    doc["is_take_out"] = values.is_take_out;
-    doc["is_power_on_boot"] = values.is_power_on_boot;
-    doc["is_buzzer_enabled"] = values.is_buzzer_enabled;
-    doc["is_logo"] = values.is_logo;
-    doc["language"] = values.language;
-    doc["brightness"] = values.brightness;
-
+    // Presets as array of objects
+    json += "\"presets\":[";
     for (int i = 0; i < NUMBER_OF_PRESETS; ++i) {
-        String presetKey = "preset_" + String(i);
-        JsonObject preset = doc.createNestedObject(presetKey);
-        preset["voltage"] = values.presets[i].voltage;
-        preset["current"] = values.presets[i].current;
-        preset["over_voltage_protection"] = values.presets[i].over_voltage_protection;
-        preset["over_current_protection"] = values.presets[i].over_current_protection;
+        if (i > 0) json += ",";
+        json += "{";
+        json += "\"voltage\":" + String(v.presets[i].voltage) + ",";
+        json += "\"current\":" + String(v.presets[i].current) + ",";
+        json += "\"over_voltage_protection\":" + String(v.presets[i].over_voltage_protection) + ",";
+        json += "\"over_current_protection\":" + String(v.presets[i].over_current_protection);
+        json += "}";
     }
+    json += "]";
 
-    String jsonString;
-    serializeJson(doc, jsonString);
-    return jsonString;
+    json += "}";
+
+    return json;
 }
+
 
 void RidenStatusClass::sendStatus()
 {

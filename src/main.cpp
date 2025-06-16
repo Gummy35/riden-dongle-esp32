@@ -497,11 +497,13 @@ void loop()
         delay(100);
         enPinStateChanged = false;
         if (enPinState) {
-            WebSerial.println("RD EN Pin activated");
             if (!connected)
+            {
+                WebSerial.println("RDxxxx unit start detected, connecting");
                 StartServices();
+            }
         } else {
-            WebSerial.println("RD EN Pin deactivated");
+            WebSerial.println("RDxxxx unit stop detected");
         }
     }
 }

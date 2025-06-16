@@ -2,9 +2,6 @@
 
 #include <LittleFS.h>
 #include <ESPAsyncWebServer.h>
-#include <AsyncJson.h>
-#include <ArduinoJson.h>
-
 #include <riden_modbus/riden_modbus.h>
 #include <riden_modbus_bridge/riden_modbus_bridge.h>
 #include <riden_scpi/riden_scpi.h>
@@ -64,8 +61,6 @@ class RidenHttpServer
     void _connectToWiFi(const String &ssid, const String &password);
     bool _writeWiFiCredentials(const String &ssid, const String &password);
     void _onOTAEnd(bool success);
-    void _handleGetJsonFile(AsyncWebServerRequest *request, const char *filename);
-    void _saveJsonToFile(AsyncWebServerRequest *request, JsonVariant &json, const char *filename);
     void _handleSaveWiFi(AsyncWebServerRequest *request);
     void _handleClearWiFi(AsyncWebServerRequest *request);
     void _handlePage(AsyncWebServerRequest *request, const char *pagePath = "/html/index.html");

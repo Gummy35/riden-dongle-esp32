@@ -376,17 +376,16 @@
 
         const tableBody = document.getElementById("presetBody");
         tableBody.innerHTML = "";
-        for (let i = 0; i <= 8; i++) {
-          if (data["preset_" + i]) {
-            let preset = data["preset_" + i];
-            const row = document.createElement('tr');
-            row.innerHTML = '<td>' + (i + 1) + '</td>' +
-              '<td>' + preset.voltage + ' V</td>' +
-              '<td>' + preset.current + ' A</td>' +
-              '<td>' + preset.over_voltage_protection + ' V</td>' +
-              '<td>' + preset.over_current_protection + ' A</td>';
-            tableBody.appendChild(row);
-          }
+        const presets = data.presets;
+        for (let i = 0; i < presets.length; i++) {
+          const preset = presets[i];
+          const row = document.createElement('tr');
+          row.innerHTML = '<td>' + (i + 1) + '</td>' +
+            '<td>' + preset.voltage + ' V</td>' +
+            '<td>' + preset.current + ' A</td>' +
+            '<td>' + preset.over_voltage_protection + ' V</td>' +
+            '<td>' + preset.over_current_protection + ' A</td>';
+          tableBody.appendChild(row);
         }
         document.getElementById('presetsSection').style.display = 'block';
       };
