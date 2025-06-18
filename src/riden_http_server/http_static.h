@@ -4,7 +4,9 @@
 
 #pragma once
 
+#ifndef ESP32
 #include <sys/pgmspace.h>
+#endif
 
 // DO NOT MODIFY THIS SECTION. IT IS MAINTAINED BY 'extract_code.py', generated from 'mockup.html'.
 static const char HTML_HEADER[] PROGMEM =
