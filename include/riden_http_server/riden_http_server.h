@@ -38,7 +38,12 @@ class RidenHttpServer
     void finish_firmware_update_post(AsyncWebServerRequest *request);
     void handle_lxi_identification(AsyncWebServerRequest *request);
     void handle_not_found(AsyncWebServerRequest *request);
-
+    void handle_control_get(AsyncWebServerRequest *request);
+    void handle_status_get(AsyncWebServerRequest *request);
+    void handle_set_i(AsyncWebServerRequest *request);
+    void handle_set_v(AsyncWebServerRequest *request);
+    void handle_toggle_out(AsyncWebServerRequest *request);
+    
     void handle_modbus_qps(AsyncWebServerRequest *request);
     void send_redirect_root(AsyncWebServerRequest *request);
     void send_redirect_self(AsyncWebServerRequest *request);

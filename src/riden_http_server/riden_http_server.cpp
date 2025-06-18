@@ -160,6 +160,12 @@ bool RidenHttpServer::begin()
                 { this->_handlePsuConfigPage(request); });
     _server->on("/config/", HTTP_POST, [this](AsyncWebServerRequest *request)
                 { this->handle_config_post(request); });
+    server.on("/control/", HTTPMethod::HTTP_GET, std::bind(&RidenHttpServer::handle_control_get, this));
+    server.on("/status", HTTPMethod::HTTP_GET, std::bind(&RidenHttpServer::handle_status_get, this));
+    server.on("/set_i", HTTPMethod::HTTP_POST, std::bind(&RidenHttpServer::handle_set_i, this));
+    server.on("/set_v", HTTPMethod::HTTP_POST, std::bind(&RidenHttpServer::handle_set_v, this));
+    server.on("/toggle_out", HTTPMethod::HTTP_GET, std::bind(&RidenHttpServer::handle_toggle_out, this));
+
     _server->on("/disconnect_client/", HTTP_POST, [this](AsyncWebServerRequest *request)
                 { this->handle_disconnect_client_post(request); });
     _server->on("/reboot/dongle/", HTTP_GET, [this](AsyncWebServerRequest *request)
@@ -460,16 +466,89 @@ void RidenHttpServer::handle_reboot_dongle_get(AsyncWebServerRequest *request)
     delay(1000);
 }
 
-// void RidenHttpServer::send_as_chunks(AsyncResponseStream* response, const char *str)
-// {
-//     const size_t chunk_length = 1000;
-//     size_t length = strlen(str);
-//     for (size_t start_pos = 0; start_pos < length; start_pos += chunk_length) {
-//         size_t end_pos = min(start_pos + chunk_length, length);
-//         response->print(&(str[start_pos]), end_pos - start_pos);
-//         yield();
-//     }
-// }
+
+void RidenHttpServer::handle_control_get(void)
+{
+    server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+    server.send(200, "text/html", HTML_HEADER);
+    server.sendContent_P(HTML_CONTROL_BODY);
+    server.sendContent_P(HTML_FOOTER);
+    server.sendContent("");
+}
+
+void RidenHttpServer::handle_status_get(void)
+{
+    AllValues all_values;
+    // get a subset of the values, reading in bulk to be fast
+    // Make sure this is below 800ms, because otherwise the graph will suffer
+    if (modbus.is_connected() && modbus.get_all_values(all_values, true)) {
+        String s = "{";
+        s += "\"out_on\": " + String(all_values.output_on ? "true" : "false");
+        s += ",\"set_v\": " + String(all_values.voltage_set, 3);
+        s += ",\"set_c\": " + String(all_values.current_set, 3);
+        s += ",\"out_v\": " + String(all_values.voltage_out, 3);
+        s += ",\"out_c\": " + String(all_values.current_out, 3);
+        s += ",\"batt_mode\": " + String(all_values.is_battery_mode ? "true" : "false");
+        s += ",\"cvmode\": " + String(all_values.output_mode == OutputMode::CONSTANT_VOLTAGE ? "true" : "false");
+        s += ",\"prot\": \"" + protection_to_string(all_values.protection) + "\"";
+        s += ",\"batt_v\": " + String(all_values.voltage_battery, 3);
+        if (all_values.probe_temperature_celsius < -50.0) {
+            s += ",\"ext_t_c\": null";
+        } else {
+            s += ",\"ext_t_c\": " + String(all_values.probe_temperature_celsius, 2);
+        }
+        s += ",\"int_t_c\": " + String(all_values.system_temperature_celsius, 2);
+        s += ",\"ah\": " + String(all_values.ah, 3);
+        s += ",\"wh\": " + String(all_values.wh, 3);
+        s += ",\"max_v\": " + String(modbus.get_max_voltage(), 3);
+        s += ",\"max_c\": " + String(modbus.get_max_current(), 3);
+        s += "}";
+        server.send(200, "application/json", s);
+    } else {
+        server.send(500, "text/plain", "Not connected to power supply");
+    }
+    server.sendContent("");
+}
+
+void RidenHttpServer::handle_set_i() 
+{
+    String s = server.arg("plain");
+    double v = std::strtod(s.c_str(), nullptr);
+    if (modbus.is_connected() && modbus.set_current_set(v)) {
+        server.send(200, "text/plain", "OK");
+    } else {
+        server.send(500, "text/plain", "Failed to set");
+    }
+}
+
+void RidenHttpServer::handle_set_v()
+{
+    String s = server.arg("plain");
+    double v = std::strtod(s.c_str(), nullptr);
+    if (modbus.is_connected() && modbus.set_voltage_set(v)) {
+        server.send(200, "text/plain", "OK");
+    } else {
+        server.send(500, "text/plain", "Failed to set");
+    }
+}
+
+void RidenHttpServer::handle_toggle_out()
+{
+    if (modbus.is_connected()) {
+        bool get_output_on;
+        if (!modbus.get_output_on(get_output_on)) {
+            get_output_on = false;
+        }
+        if (modbus.set_output_on(!get_output_on)) {
+            // and reply with full data set
+            handle_status_get();
+        } else {
+            server.send(500, "text/plain", "Failed to toggle output");
+        }
+    } else {
+        server.send(500, "text/plain", "Not connected to power supply");
+    }
+}
 
 void RidenHttpServer::send_redirect_root(AsyncWebServerRequest *request)
 {
