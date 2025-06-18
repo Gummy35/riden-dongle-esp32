@@ -1,5 +1,23 @@
 # Riden Dongle - A Multi-Protocol Firmware for the Riden WiFi Module
 
+The aim of this fork is to offer a port to ESP32, including :
+- WebSerial (including direct access to the SCPI interface)
+- ElegantOTA
+- Safeboot mode
+- Debug functions
+- Web interface (mainly for desktop, hb020 already did a great job for the mobile version)
+- If possible, include curve programming capabilities (inspired by the HomeAssistant firmware projects for Riden power supplies).
+
+The ESP32 consumes a lot of current, so there are a lot of precautions to be taken regarding its power supply with the dongle port. I'll post the modifications ASAP.
+
+Warning: I'm not a trained electronics technician, and I'm an UI whiz.
+I'm doing this to learn, and for fun, while trying to progress and above all respect the original project as much as possible.
+
+Below, the original README:
+
+------------------------------------------
+
+
 This is an alternative firmware for the Riden WiFi module that
 provides Modbus TCP and SCPI support as well as a web interface.
 
