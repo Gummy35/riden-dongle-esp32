@@ -10,7 +10,7 @@ The aim of this fork is to offer a port to ESP32, including :
 
 The ESP32 consumes a lot of current, so there are a lot of precautions to be taken regarding its power supply with the dongle port. I'll post the modifications ASAP.
 
-Warning: I'm not a trained electronics technician, and I'm an UI whiz.
+Warning: I'm not a trained electronics technician, and I'm far from beeing a UI specialist.
 I'm doing this to learn, and for fun, while trying to progress and above all respect the original project as much as possible.
 
 Below, the original README:
